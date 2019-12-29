@@ -14,6 +14,8 @@ object lang {
   type Data = Bit | ~[_, _]
   case class ~[S <: Data, T <: Data](lhs: S, rhs: T)
 
+  case class Symbol(name: String)
+
   sealed trait Signal[T <: Data] {
     def unary_! : Signal[T] = Not(this)
     def && (rhs: Signal[T]): Signal[T] = And(this, rhs)
@@ -40,16 +42,14 @@ object lang {
     }
   }
 
-  /** Used for external input
-   */
-  case class Input[T <: Data](name: String, schema: Data) extends Signal[T]
+  case class Var[T <: Data](sym: Symbol, schema: Data) extends Signal[T]
 
-  case class Let[S <: Data, T <: Data](name: String, sig: Signal[S])(fn: Signal[S] => Signal[T]) extends Signal[T] {
-    val schema: Data = fn(sig).schema
+  case class Let[S <: Data, T <: Data](sym: Symbol, sig: Signal[S],  body: Signal[T]) extends Signal[T] {
+    val schema: Data = body.schema
   }
 
-  case class Fsm[S <: Data, T <: Data](name: String, init: S)(next: Signal[S] => Signal[S ~ T]) extends Signal[T] {
-    val schema: Data = next(init.toSignal).schema match {
+  case class Fsm[S <: Data, T <: Data](sym: Symbol, init: S, body: Signal[S ~ T]) extends Signal[T] {
+    val schema: Data = body.schema match {
       case s1 ~ s2 => s2
       case _ => ???  // impossible
     }
@@ -75,15 +75,19 @@ object lang {
 
   // ---------------- constructors --------------------
 
-  def let[S <: Data, T <: Data](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] =
-    Let(name, t)(fn)
+  def let[S <: Data, T <: Data](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] = {
+    val sym = Symbol(name)
+    Let(sym, t, fn(Var(sym, t.schema)))
+  }
 
   def [S <: Data, T <: Data](t: Signal[S ~ T]) _1: Signal[S] = Left(t)
 
   def [S <: Data, T <: Data](t: Signal[S ~ T]) _2: Signal[T] = Right(t)
 
-  def fsm[S <: Data, T <: Data](name: String, init: S)(next: Signal[S] => Signal[S ~ T]): Signal[T] =
-    Fsm(name, init)(next)
+  def fsm[S <: Data, T <: Data](name: String, init: S)(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
+    val sym = Symbol(name)
+    Fsm(sym, init, next(Var(sym, init)))
+  }
 
   def [T <: Data](data: T) toSignal: Signal[T] = data match {
     case b: Bit => lit(b).asInstanceOf
@@ -91,7 +95,7 @@ object lang {
   }
 
   inline def input[T <: Data](name: String): Signal[T] =
-    Input(name, schemaOf[T])
+    Var(Symbol(name), schemaOf[T])
 
   inline def schemaOf[T <: Data]: T = inline erasedValue[T] match {
     case _: Bit        => true.asInstanceOf
