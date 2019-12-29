@@ -93,29 +93,35 @@ object lang {
   inline def input[T <: Data](name: String): Signal[T] =
     Input(name, schemaOf[T])
 
-  inline def schemaOf[T <: Data]: Data = inline erasedValue[T] match {
-    case _: Bit        => true
-    case _: ~[t1, t2]  => new ~(schemaOf[t1], schemaOf[t2])
+  inline def schemaOf[T <: Data]: T = inline erasedValue[T] match {
+    case _: Bit        => true.asInstanceOf
+    case _: ~[t1, t2]  => (new ~(schemaOf[t1], schemaOf[t2])).asInstanceOf
   }
+
+  def [S <: Data, T <: Data](lhs: S) ~ (rhs: T): S ~ T = new ~(lhs, rhs)
 
   // Boolean -> Bits
   implicit val lit: Conversion[Boolean, Signal[Bit]] = Lit(_)
 
   // Int -> Bits
-  def (n: Int) toBits(N: Int): Signal[Vec[N.type]] = {
+  def (n: Int) toVec(N: Int): Vec[N.type] = {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n > 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
 
-    var res: Signal[_] = null
+    var res: Data = null
     var shift = 1 << N
     while (shift > 0) {
-      val v = lit((n & (1 << shift)) == 0)
-      res = if (res == null) v else res ~ v
+      val b = (n & (1 << shift)) == 0
+      res = if (res == null) b else new ~(res, b)
       shift = shift >> 1
     }
 
     res.asInstanceOf
   }
+
+  // Int -> Bits
+  def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] =
+    n.toVec(N).toSignal[Vec[N.type]]
 
   // ---------------- common definitions & utilities --------------------
   type Vec[N <: Int & Singleton] <: Data = N match {
