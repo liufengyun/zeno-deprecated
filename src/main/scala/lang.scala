@@ -29,12 +29,14 @@ object lang {
   case class Left[S <: Data, T <: Data](pair: Signal[S ~ T]) extends Signal[S] {
     val schema: Data = pair.schema match {
       case s1 ~ s2 => s1
+      case _ => ???  // impossible
     }
   }
 
   case class Right[S <: Data, T <: Data](pair: Signal[S ~ T]) extends Signal[T] {
     val schema: Data = pair.schema match {
       case s1 ~ s2 => s2
+      case _ => ???  // impossible
     }
   }
 
@@ -49,6 +51,7 @@ object lang {
   case class Fsm[S <: Data, T <: Data](name: String, init: S)(next: Signal[S] => Signal[S ~ T]) extends Signal[T] {
     val schema: Data = next(init.toSignal).schema match {
       case s1 ~ s2 => s2
+      case _ => ???  // impossible
     }
   }
 
@@ -86,6 +89,9 @@ object lang {
     case b: Bit => lit(b).asInstanceOf
     case l ~ r  => (l.toSignal ~ r.toSignal).asInstanceOf
   }
+
+  inline def input[T <: Data](name: String): Signal[T] =
+    Input(name, schemaOf[T])
 
   inline def schemaOf[T <: Data]: Data = inline erasedValue[T] match {
     case _: Bit        => true
