@@ -21,6 +21,12 @@ object lang {
     def && (rhs: Signal[T]): Signal[T] = And(this, rhs)
     def || (rhs: Signal[T]): Signal[T] = Or(this, rhs)
     def ~[U <: Data](rhs: Signal[U]): Signal[T ~ U] = Pair(this, rhs)
+
+    def as[S <: Data]: Signal[S] = {
+      // TODO: add dynamic check
+      this.asInstanceOf
+    }
+
     def schema: Data
   }
 
@@ -127,7 +133,34 @@ object lang {
   def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] =
     n.toVec(N).toSignal[Vec[N.type]]
 
+  // ---------------- range operations --------------------
+
+  def [S <: Data](sig: Signal[S]) at(index: Int): Signal[_] = {
+    assert(index >= 0)
+    if (index == 0) sig.asInstanceOf
+    else sig.schema match {
+      case b: Bit  => throw new Exception("index out of range")
+      case s1 ~ s2 => sig.as[Data ~ Data]._2.at(index - 1)
+    }
+  }
+
+  def [S <: Data](sig: Signal[S]) range(from: Int, to: Int): Signal[_] = {
+    assert(from >= 0 && to >=0 && from < to)
+    def recur[T <: Data](sig: Signal[T], acc: Signal[_], curIndex: Int): Signal[_] = {
+      if (curIndex == to) acc
+      else sig.schema match {
+        case b: Bit  => throw new Exception("index out of range")
+        case s1 ~ s2 =>
+          val sig2 = sig.as[Data ~ Data]
+          if (curIndex < from) recur(sig2._2, acc, curIndex + 1)
+          else recur(sig2._2, if (acc == null) sig2._1 else acc ~ sig2._1, curIndex + 1)
+      }
+    }
+    recur(sig, null, 0)
+  }
+
   // ---------------- common definitions & utilities --------------------
+
   type Vec[N <: Int & Singleton] <: Data = N match {
     case 1 => Bit
     case S[n] => Bit ~ Vec[n]
