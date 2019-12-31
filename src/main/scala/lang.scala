@@ -109,6 +109,13 @@ object lang {
     case _: BitV      => Bit
     case PairV(l, r)  => new ~(typeOf(l), typeOf(r))
   }
+
+  def isVec(tpe: Type): Boolean = tpe match {
+    case Bit      => true
+    case Bit ~ t2 => isVec(t2)
+    case _        => false
+  }
+
   // ---------------- constructors --------------------
 
   def let[S <: Type, T <: Type](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] = {
@@ -138,6 +145,8 @@ object lang {
 
   // Boolean -> Bits
   implicit val lit: Conversion[Boolean, Signal[Bit]] = b => Lit(b)
+  implicit val lit1: Conversion[1, Signal[Bit]] = one => Lit(true)
+  implicit val lit0: Conversion[0, Signal[Bit]] = zero => Lit(false)
 
   // ---------------- bit vector operations --------------------
   type Num = Int & Singleton
@@ -160,16 +169,16 @@ object lang {
     val m: M = amount.size
 
     // index starts from least significant bit of `amount`
-    def recur(index: Int, toShift: Signal[Type]): Signal[Type] =
+    def recur(index: Int, toShift: Signal[Vec[N]]): Signal[Vec[N]] =
       if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
-        val padding = 0.toSignal(bitsToShift).as[Type]
+        val padding = 0.toSignal(bitsToShift).as[Vec[10]] // ignore 10: just for type checking
         val shifted =
-          if (isLeft) (toShift.range(bitsToShift, n) ~ padding).as[Type]
-          else (padding ~ toShift.range(0, n - bitsToShift)).as[Type]
+          if (isLeft) (toShift.range(bitsToShift, n).as[Vec[10]] ++ padding).as[Vec[N]]
+          else (padding ++ toShift.range(0, n - bitsToShift).as[Vec[10]]).as[Vec[N]]
 
-        val test: Signal[Type] =
+        val test: Signal[Vec[N]] =
           when (amount.at(index).as[Bit]) {
             shifted
           } otherwise {
@@ -178,19 +187,19 @@ object lang {
         recur(index + 1, test)
       }
 
-    recur(0, vec.as[Type]).asInstanceOf
+    recur(0, vec)
   }
 
 
-  // logical shift left
+  /** logical shift left */
   def [N <: Num, M <: Num](vec: Signal[Vec[N]]) << (amount: Signal[Vec[M]]): Signal[Vec[N]] =
     shiftImpl(vec, amount, isLeft = true)
 
-  // logical shift  right
+  /** logical shift  right */
   def [N <: Num, M <: Num](vec: Signal[Vec[N]]) >> (amount: Signal[Vec[M]]): Signal[Vec[N]] =
     shiftImpl(vec, amount, isLeft = false)
 
-  // unsigned addition, ripple-carry adder
+  /** unsigned addition, ripple-carry adder */
   def [N <: Num](vec1: Signal[Vec[N]]) + (vec2: Signal[Vec[N]]): (Signal[Bit], Signal[Vec[N]]) = {
     val n: N = vec1.size
 
@@ -208,7 +217,7 @@ object lang {
     recur(0, lit(false), null).asInstanceOf
   }
 
-  // unsigned subtraction
+  /** unsigned subtraction */
   def [N <: Num](vec1: Signal[Vec[N]]) - (vec2: Signal[Vec[N]]): (Signal[Bit], Signal[Vec[N]]) = {
     val n: N = vec1.size
 
@@ -226,7 +235,7 @@ object lang {
     recur(0, lit(false), null).asInstanceOf
   }
 
-  // Int -> Bits
+  /** Int -> Bits */
   def (n: Int) toValue(N: Int): Value[Vec[N.type]] = {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n > 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
@@ -242,9 +251,21 @@ object lang {
     res.asInstanceOf
   }
 
-  // Int -> Bits
+  /** Int -> Bits */
   def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] =
     n.toValue(N).toSignal[Vec[N.type]]
+
+  /** Concat two bit vectors */
+  def (sig1: Signal[_]) ++ (sig2: Signal[_]): Signal[_] = {
+    assert(isVec(sig1.tpe))
+    assert(isVec(sig2.tpe))
+
+    sig1.tpe match {
+      case Bit      => sig1 ~ sig2
+      case Bit ~ t2 => sig1.as[Bit ~ Bit].left ~ (sig1.as[Bit ~ Bit].right ++ sig2)
+      case _        => ??? // impossible
+    }
+  }
 
   // ---------------- range operations --------------------
 
@@ -303,7 +324,7 @@ object lang {
    *
    *  }
    */
-  def when[T <: Type](cond: Signal[Bit])(x: => Signal[T]): WhenCont[T] =
+  def when[T <: Type](cond: Signal[Bit])(x: Signal[T]): WhenCont[T] =
      WhenCont(r => test(cond, x, r))
   class WhenCont[T <: Type](cont: Signal[T] => Signal[T]) {
     def otherwise(y: Signal[T]): Signal[T] = cont(y)
