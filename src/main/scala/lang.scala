@@ -116,9 +116,9 @@ object lang {
     Let(sym, t, fn(Var(sym, t.tpe)))
   }
 
-  def [S <: Type, T <: Type](t: Signal[S ~ T]) _1: Signal[S] = Left(t)
+  def [S <: Type, T <: Type](t: Signal[S ~ T]) left: Signal[S] = Left(t)
 
-  def [S <: Type, T <: Type](t: Signal[S ~ T]) _2: Signal[T] = Right(t)
+  def [S <: Type, T <: Type](t: Signal[S ~ T]) right: Signal[T] = Right(t)
 
   def fsm[S <: Type, T <: Type](name: String, init: Value[S])(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
     val sym = Symbol(name)
@@ -253,7 +253,7 @@ object lang {
     if (index == 0) sig.asInstanceOf
     else sig.tpe match {
       case Bit     => throw new Exception("index out of range")
-      case s1 ~ s2 => sig.as[Type ~ Type]._2.at(index - 1)
+      case s1 ~ s2 => sig.as[Type ~ Type].right.at(index - 1)
     }
   }
 
@@ -265,8 +265,8 @@ object lang {
         case b: Bit  => throw new Exception("index out of range")
         case s1 ~ s2 =>
           val sig2 = sig.as[Type ~ Type]
-          if (curIndex < from) recur(sig2._2, acc, curIndex + 1)
-          else recur(sig2._2, if (acc == null) sig2._1 else acc ~ sig2._1, curIndex + 1)
+          if (curIndex < from) recur(sig2.right, acc, curIndex + 1)
+          else recur(sig2.right, if (acc == null) sig2.left else acc ~ sig2.left, curIndex + 1)
       }
     }
     recur(sig, null, 0)
@@ -288,7 +288,7 @@ object lang {
       type T2 <: Type
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
       val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
-      (test(cond, x1._1, y1._1) ~ test(cond, x1._2, y1._2)).asInstanceOf
+      (test(cond, x1.left, y1.left) ~ test(cond, x1.right, y1.right)).asInstanceOf
     case _ =>
       test1(cond, x.asInstanceOf[Signal[Bit]], y.asInstanceOf[Signal[Bit]]).asInstanceOf
   }
@@ -318,7 +318,7 @@ object lang {
       type T2 <: Type
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
       val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
-      ??? // x1._1 === y1._1 && x1._2 === y1._2
+      (x1.left === y1.left) && (x1.right === y1.right)
     case _ =>
       equalBit(x.asInstanceOf[Signal[Bit]], y.asInstanceOf[Signal[Bit]])
   }
