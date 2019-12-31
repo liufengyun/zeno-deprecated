@@ -138,9 +138,9 @@ object lang {
     val n: N = vec.size
     val m: M = amount.size
 
-    // index starts from lowest bit of `amount`
+    // index starts from least significant bit of `amount`
     def recur(index: Int, toShift: Signal[Data]): Signal[Data] =
-      if (index > m) toShift
+      if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
         val padding = 0.toSignal(bitsToShift).as[Data]
@@ -169,7 +169,23 @@ object lang {
   def [N <: Num, M <: Num](vec: Signal[Vec[N]]) >> (amount: Signal[Vec[M]]): Signal[Vec[N]] =
     shiftImpl(vec, amount, isLeft = false)
 
-  // add
+  // unsigned addition, ripple-carry adder
+  def [N <: Num](vec1: Signal[Vec[N]]) + (vec2: Signal[Vec[N]]): (Signal[Bit], Signal[Vec[N]]) = {
+    val n: N = vec1.size
+
+    // index starts from least significant bit
+    def recur(index: Int, cin: Signal[Bit], acc: Signal[_]): (Signal[Bit], Signal[_]) =
+      if (index >= n) (cin, acc)
+      else {
+        val a: Signal[Bit] = vec1.at(index).as[Bit]
+        val b: Signal[Bit] = vec2.at(index).as[Bit]
+        val s: Signal[Bit] = a ^ b ^ cin
+        val cout: Signal[Bit] = (a && b ) || (cin && (a ^ b))
+        recur(index + 1, cout, if (acc == null) s else s ~ acc)
+      }
+
+    recur(0, lit(false), null).asInstanceOf
+  }
 
   // sub
 
