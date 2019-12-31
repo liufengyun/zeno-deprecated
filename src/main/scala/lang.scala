@@ -208,7 +208,23 @@ object lang {
     recur(0, lit(false), null).asInstanceOf
   }
 
-  // sub
+  // unsigned subtraction
+  def [N <: Num](vec1: Signal[Vec[N]]) - (vec2: Signal[Vec[N]]): (Signal[Bit], Signal[Vec[N]]) = {
+    val n: N = vec1.size
+
+    // index starts from least significant bit
+    def recur(index: Int, bin: Signal[Bit], acc: Signal[_]): (Signal[Bit], Signal[_]) =
+      if (index >= n) (bin, acc)
+      else {
+        val a: Signal[Bit] = vec1.at(index).as[Bit]
+        val b: Signal[Bit] = vec2.at(index).as[Bit]
+        val d: Signal[Bit] = a ^ b ^ bin
+        val bout: Signal[Bit] = (!a && b) || (!a && bin) || (b && bin)
+        recur(index + 1, bout, if (acc == null) d else d ~ acc)
+      }
+
+    recur(0, lit(false), null).asInstanceOf
+  }
 
   // Int -> Bits
   def (n: Int) toValue(N: Int): Value[Vec[N.type]] = {
