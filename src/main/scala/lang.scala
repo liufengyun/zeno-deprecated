@@ -10,9 +10,11 @@ object lang {
    *  - usability with path-dependent types is not good
    *  - it's reported in Lava that AST representation is better for processing
    */
-  type Bit = Boolean
-  type Data = Bit | ~[_, _]
-  case class ~[S <: Data, T <: Data](lhs: S, rhs: T)
+
+  // values of signal
+  sealed trait Data
+  case class Bit(value: Boolean) extends Data
+  case class ~[S <: Data, T <: Data](lhs: S, rhs: T) extends Data
 
   case class Symbol(name: String)
 
@@ -63,7 +65,7 @@ object lang {
   }
 
   case class Lit(value: Bit) extends Signal[Bit] {
-    val schema: Data = true
+    val schema: Data = Bit(true)
   }
 
   case class And[T <: Data](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
@@ -99,7 +101,7 @@ object lang {
   }
 
   def [T <: Data](data: T) toSignal: Signal[T] = data match {
-    case b: Bit => lit(b).asInstanceOf
+    case b: Bit => Lit(b).asInstanceOf
     case l ~ r  => (l.toSignal ~ r.toSignal).asInstanceOf
   }
 
@@ -114,7 +116,7 @@ object lang {
   def [S <: Data, T <: Data](lhs: S) ~ (rhs: T): S ~ T = new ~(lhs, rhs)
 
   // Boolean -> Bits
-  implicit val lit: Conversion[Boolean, Signal[Bit]] = Lit(_)
+  implicit val lit: Conversion[Boolean, Signal[Bit]] = b => Lit(Bit(b))
 
   // ---------------- bit vector operations --------------------
   type Num = Int & Singleton
@@ -128,7 +130,6 @@ object lang {
     def recur(schema: Data): Int = schema match {
       case _: Bit => 1
       case (_: Bit) ~ s =>  1 + recur(s)
-      case _ => ??? // impossible
     }
     recur(vec.schema).asInstanceOf
   }
@@ -193,7 +194,7 @@ object lang {
     var shift = 1 << N
     while (shift > 0) {
       val b = (n & (1 << shift)) == 0
-      res = if (res == null) b else new ~(res, b)
+      res = if (res == null) Bit(b) else new ~(res, Bit(b))
       shift = shift >> 1
     }
 
