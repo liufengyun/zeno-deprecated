@@ -20,6 +20,7 @@ object lang {
     def unary_! : Signal[T] = Not(this)
     def && (rhs: Signal[T]): Signal[T] = And(this, rhs)
     def || (rhs: Signal[T]): Signal[T] = Or(this, rhs)
+    def ^ (rhs: Signal[T]): Signal[T] = Or(And(this, !rhs), And(!this, rhs))
     def ~[U <: Data](rhs: Signal[U]): Signal[T ~ U] = Pair(this, rhs)
 
     def as[S <: Data]: Signal[S] = {
@@ -79,6 +80,8 @@ object lang {
     val schema: Data = in.schema
   }
 
+  case class Circuit[S <: Data, T <: Data](in: Var[S], body: Signal[T])
+
   // ---------------- constructors --------------------
 
   def let[S <: Data, T <: Data](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] = {
@@ -112,6 +115,72 @@ object lang {
 
   // Boolean -> Bits
   implicit val lit: Conversion[Boolean, Signal[Bit]] = Lit(_)
+
+  // ---------------- bit vector operations --------------------
+  type Num = Int & Singleton
+
+  type Vec[N <: Num] <: Data = N match {
+    case 1 => Bit
+    case S[n] => Bit ~ Vec[n]
+  }
+
+  def [N <: Num](vec: Signal[Vec[N]]) size: N = {
+    def recur(schema: Data): Int = schema match {
+      case _: Bit => 1
+      case (_: Bit) ~ s =>  1 + recur(s)
+      case _ => ??? // impossible
+    }
+    recur(vec.schema).asInstanceOf
+  }
+
+  // logical shift left
+  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) << (amount: Signal[Vec[M]]): Signal[Vec[N]] = {
+    val n: N = vec.size
+    val m: M = amount.size
+
+    // index starts from lowest bit of `amount`
+    def recur(index: Int, toShift: Signal[Data]): Signal[Data] =
+      if (index > m) toShift
+      else {
+        val bitsToShift = 1 << index
+        val padding = 0.toSignal(bitsToShift).as[Data]
+        val shifted: Signal[Data] =
+          when(amount.at(index).as[Bit])(
+            (toShift.range(bitsToShift, n) ~ padding).as[Data],
+            toShift
+          )
+        recur(index + 1, shifted)
+      }
+
+    recur(0, vec.as[Data]).asInstanceOf
+  }
+
+  // logical shift  right
+  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) >> (amount: Signal[Vec[M]]): Signal[Vec[N]] = {
+    val n: N = vec.size
+    val m: M = amount.size
+
+    // index starts from lowest bit of `amount`
+    def recur(index: Int, toShift: Signal[Data]): Signal[Data] =
+      if (index > m) toShift
+      else {
+        val bitsToShift = 1 << index
+        val padding = 0.toSignal(bitsToShift).as[Data]
+        val shifted: Signal[Data] =
+          when(amount.at(index).as[Bit])(
+            (padding ~ toShift.range(0, n - bitsToShift)).as[Data],
+            toShift
+          )
+        recur(index + 1, shifted)
+      }
+
+    recur(0, vec.as[Data]).asInstanceOf
+  }
+
+
+  // add
+
+  // sub
 
   // Int -> Bits
   def (n: Int) toVec(N: Int): Vec[N.type] = {
@@ -159,12 +228,7 @@ object lang {
     recur(sig, null, 0)
   }
 
-  // ---------------- common definitions & utilities --------------------
-
-  type Vec[N <: Int & Singleton] <: Data = N match {
-    case 1 => Bit
-    case S[n] => Bit ~ Vec[n]
-  }
+  // ----------------  utilities --------------------
 
   // Tuple -> Pair
   implicit def tuple2toPair[S <: Data, T <: Data]: Conversion[(Signal[S], Signal[T]), Signal[S ~ T]] =
