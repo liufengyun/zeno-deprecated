@@ -134,8 +134,7 @@ object lang {
     recur(vec.schema).asInstanceOf
   }
 
-  // logical shift left
-  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) << (amount: Signal[Vec[M]]): Signal[Vec[N]] = {
+  private  def shiftImpl[N <: Num, M <: Num](vec: Signal[Vec[N]], amount: Signal[Vec[M]], isLeft: Boolean): Signal[Vec[N]] = {
     val n: N = vec.size
     val m: M = amount.size
 
@@ -145,41 +144,30 @@ object lang {
       else {
         val bitsToShift = 1 << index
         val padding = 0.toSignal(bitsToShift).as[Data]
-        val shifted: Signal[Data] =
+        val shifted =
+          if (isLeft) (toShift.range(bitsToShift, n) ~ padding).as[Data]
+          else (padding ~ toShift.range(0, n - bitsToShift)).as[Data]
+
+        val test: Signal[Data] =
           when (amount.at(index).as[Bit]) {
-            (toShift.range(bitsToShift, n) ~ padding).as[Data]
+            shifted
           } otherwise {
             toShift
           }
-        recur(index + 1, shifted)
+        recur(index + 1, test)
       }
 
     recur(0, vec.as[Data]).asInstanceOf
   }
+
+
+  // logical shift left
+  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) << (amount: Signal[Vec[M]]): Signal[Vec[N]] =
+    shiftImpl(vec, amount, isLeft = true)
 
   // logical shift  right
-  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) >> (amount: Signal[Vec[M]]): Signal[Vec[N]] = {
-    val n: N = vec.size
-    val m: M = amount.size
-
-    // index starts from lowest bit of `amount`
-    def recur(index: Int, toShift: Signal[Data]): Signal[Data] =
-      if (index > m) toShift
-      else {
-        val bitsToShift = 1 << index
-        val padding = 0.toSignal(bitsToShift).as[Data]
-        val shifted: Signal[Data] =
-          when  (amount.at(index).as[Bit]) {
-            (padding ~ toShift.range(0, n - bitsToShift)).as[Data]
-          } otherwise {
-            toShift
-          }
-        recur(index + 1, shifted)
-      }
-
-    recur(0, vec.as[Data]).asInstanceOf
-  }
-
+  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) >> (amount: Signal[Vec[M]]): Signal[Vec[N]] =
+    shiftImpl(vec, amount, isLeft = false)
 
   // add
 
