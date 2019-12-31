@@ -44,7 +44,11 @@ object Controller {
   def instrMemory(addrWidth: Int, prog: Array[Int], addr: Signal[Vec[addrWidth.type]]): Signal[Vec[16]] = {
     val default: Signal[Vec[16]] = 0.toSignal(16)
     (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
-      when (addr === curAddr.toSignal(addrWidth))(prog(curAddr).toSignal(16), acc)
+      when[Vec[16]] (addr === curAddr.toSignal(addrWidth)) {
+        prog(curAddr).toSignal(16)
+      } otherwise {
+        acc
+      }
     }
   }
 

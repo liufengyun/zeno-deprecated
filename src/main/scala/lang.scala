@@ -145,10 +145,11 @@ object lang {
         val bitsToShift = 1 << index
         val padding = 0.toSignal(bitsToShift).as[Data]
         val shifted: Signal[Data] =
-          when(amount.at(index).as[Bit])(
-            (toShift.range(bitsToShift, n) ~ padding).as[Data],
+          when (amount.at(index).as[Bit]) {
+            (toShift.range(bitsToShift, n) ~ padding).as[Data]
+          } otherwise {
             toShift
-          )
+          }
         recur(index + 1, shifted)
       }
 
@@ -167,10 +168,11 @@ object lang {
         val bitsToShift = 1 << index
         val padding = 0.toSignal(bitsToShift).as[Data]
         val shifted: Signal[Data] =
-          when(amount.at(index).as[Bit])(
-            (padding ~ toShift.range(0, n - bitsToShift)).as[Data],
+          when  (amount.at(index).as[Bit]) {
+            (padding ~ toShift.range(0, n - bitsToShift)).as[Data]
+          } otherwise {
             toShift
-          )
+          }
         recur(index + 1, shifted)
       }
 
@@ -237,16 +239,34 @@ object lang {
   implicit def tuple3toPair[T1 <: Data, T2 <: Data, T3 <: Data]: Conversion[(Signal[T1], Signal[T2], Signal[T3]), Signal[T1 ~ T2 ~ T3]] =
     t3 => t3._1 ~ t3._2 ~ t3._3
 
-  def when1(cond: Signal[Bit], x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (!cond || x) && (cond || y)
-  def when[T <: Data](cond: Signal[Bit])(x: Signal[T], y: Signal[T]): Signal[T] = x.schema match {
+  def test1(cond: Signal[Bit], x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (!cond || x) && (cond || y)
+  def test[T <: Data](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = x.schema match {
     case s1 ~ s2 =>
       type T1 <: Data
       type T2 <: Data
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
       val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
-      (when(cond)(x1._1, y1._1) ~ when(cond)(x1._2, y1._2)).asInstanceOf
+      (test(cond, x1._1, y1._1) ~ test(cond, x1._2, y1._2)).asInstanceOf
     case _ =>
-      when1(cond, x.asInstanceOf[Signal[Bit]], y.asInstanceOf[Signal[Bit]]).asInstanceOf
+      test1(cond, x.asInstanceOf[Signal[Bit]], y.asInstanceOf[Signal[Bit]]).asInstanceOf
+  }
+
+  /** When syntax
+   *
+   *  when (a) {
+   *
+   *  } when (b) {
+   *
+   *  } otherwise {
+   *
+   *  }
+   */
+  def when[T <: Data](cond: Signal[Bit])(x: => Signal[T]): WhenCont[T] =
+     WhenCont(r => test(cond, x, r))
+  class WhenCont[T <: Data](cont: Signal[T] => Signal[T]) {
+    def otherwise(y: Signal[T]): Signal[T] = cont(y)
+    def when (cond2: Signal[Bit])(z: Signal[T]): WhenCont[T] =
+      WhenCont(r => cont(test(cond2, z, r)))
   }
 
   def equalBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x && y) || (!x && !y)
