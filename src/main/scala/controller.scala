@@ -61,8 +61,8 @@ object Controller {
     type PC  = Vec[addrWidth.type]
     type ACC = Vec[32]
 
-    val pcInit: PC   = 0.toVec(addrWidth)
-    val accInit: ACC = 0.toVec(32)
+    val pcInit: Value[PC]   = 0.toValue(addrWidth)
+    val accInit: Value[ACC] = 0.toValue(32)
 
     fsm("processor", pcInit ~ accInit) { (s: Signal[PC ~ ACC]) =>
       ???

@@ -11,127 +11,148 @@ object lang {
    *  - it's reported in Lava that AST representation is better for processing
    */
 
-  // values of signal
-  sealed trait Data
-  case class Bit(value: Boolean) extends Data
-  case class ~[S <: Data, T <: Data](lhs: S, rhs: T) extends Data
+  // ---------------- Type of signal --------------------
 
+  sealed trait Type
+  object Bit extends Type
+  case class ~[S <: Type, T <: Type](lhs: S, rhs: T) extends Type
+
+  type Bit = Bit.type
+
+  // ---------------- values of signal --------------------
+
+  sealed trait Value[T <: Type]
+
+  case class BitV(value: Boolean) extends Value[Bit]
+
+  case class PairV[S <: Type, T <: Type](lhs: Value[S], rhs: Value[T]) extends Value[S ~ T]
+
+  // ---------------- abstract syntax trees --------------------
+
+  // symbol for bindings
   case class Symbol(name: String)
 
-  sealed trait Signal[T <: Data] {
+  sealed trait Signal[T <: Type] {
     def unary_! : Signal[T] = Not(this)
     def && (rhs: Signal[T]): Signal[T] = And(this, rhs)
     def || (rhs: Signal[T]): Signal[T] = Or(this, rhs)
     def ^ (rhs: Signal[T]): Signal[T] = Or(And(this, !rhs), And(!this, rhs))
-    def ~[U <: Data](rhs: Signal[U]): Signal[T ~ U] = Pair(this, rhs)
+    def ~[U <: Type](rhs: Signal[U]): Signal[T ~ U] = Pair(this, rhs)
 
-    def as[S <: Data]: Signal[S] = {
+    def as[S <: Type]: Signal[S] = {
       // TODO: add dynamic check
       this.asInstanceOf
     }
 
-    def schema: Data
+    def tpe: Type
   }
 
-  case class Pair[S <: Data, T <: Data](lhs: Signal[S], rhs: Signal[T]) extends Signal[S ~ T] {
-    val schema: Data = new ~(lhs.schema, rhs.schema)
+  case class Pair[S <: Type, T <: Type](lhs: Signal[S], rhs: Signal[T]) extends Signal[S ~ T] {
+    val tpe: Type = new ~(lhs.tpe, rhs.tpe)
   }
 
-  case class Left[S <: Data, T <: Data](pair: Signal[S ~ T]) extends Signal[S] {
-    val schema: Data = pair.schema match {
+  case class Left[S <: Type, T <: Type](pair: Signal[S ~ T]) extends Signal[S] {
+    val tpe: Type = pair.tpe match {
       case s1 ~ s2 => s1
       case _ => ???  // impossible
     }
   }
 
-  case class Right[S <: Data, T <: Data](pair: Signal[S ~ T]) extends Signal[T] {
-    val schema: Data = pair.schema match {
+  case class Right[S <: Type, T <: Type](pair: Signal[S ~ T]) extends Signal[T] {
+    val tpe: Type = pair.tpe match {
       case s1 ~ s2 => s2
       case _ => ???  // impossible
     }
   }
 
-  case class Var[T <: Data](sym: Symbol, schema: Data) extends Signal[T]
+  case class Var[T <: Type](sym: Symbol, tpe: Type) extends Signal[T]
 
-  case class Let[S <: Data, T <: Data](sym: Symbol, sig: Signal[S],  body: Signal[T]) extends Signal[T] {
-    val schema: Data = body.schema
+  case class Let[S <: Type, T <: Type](sym: Symbol, sig: Signal[S],  body: Signal[T]) extends Signal[T] {
+    val tpe: Type = body.tpe
   }
 
-  case class Fsm[S <: Data, T <: Data](sym: Symbol, init: S, body: Signal[S ~ T]) extends Signal[T] {
-    val schema: Data = body.schema match {
+  case class Fsm[S <: Type, T <: Type](sym: Symbol, init: Value[S], body: Signal[S ~ T]) extends Signal[T] {
+    val tpe: Type = body.tpe match {
       case s1 ~ s2 => s2
       case _ => ???  // impossible
     }
   }
 
-  case class Lit(value: Bit) extends Signal[Bit] {
-    val schema: Data = Bit(true)
+  case class Lit(value: Boolean) extends Signal[Bit] {
+    val tpe: Type = Bit
   }
 
-  case class And[T <: Data](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
-    assert(lhs.schema == rhs.schema)
-    val schema: Data = lhs.schema
+  case class And[T <: Type](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
+    assert(lhs.tpe == rhs.tpe)
+    val tpe: Type = lhs.tpe
   }
 
-  case class Or[T <: Data](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
-    assert(lhs.schema == rhs.schema)
-    val schema: Data = lhs.schema
+  case class Or[T <: Type](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
+    assert(lhs.tpe == rhs.tpe)
+    val tpe: Type = lhs.tpe
   }
 
-  case class Not[T <: Data](in: Signal[T]) extends Signal[T] {
-    val schema: Data = in.schema
+  case class Not[T <: Type](in: Signal[T]) extends Signal[T] {
+    val tpe: Type = in.tpe
   }
 
-  case class Circuit[S <: Data, T <: Data](in: Var[S], body: Signal[T])
+  case class Circuit[S <: Type, T <: Type](in: Var[S], body: Signal[T])
 
+  // ---------------- type operations --------------------
+
+  inline def typeOf[T <: Type]: T = inline erasedValue[T] match {
+    case Bit           => Bit.asInstanceOf
+    case _: ~[t1, t2]  => (new ~(typeOf[t1], typeOf[t2])).asInstanceOf
+  }
+
+  def typeOf[T <: Type](value: Value[T]): T = value match {
+    case _: BitV      => Bit
+    case PairV(l, r)  => new ~(typeOf(l), typeOf(r))
+  }
   // ---------------- constructors --------------------
 
-  def let[S <: Data, T <: Data](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] = {
+  def let[S <: Type, T <: Type](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] = {
     val sym = Symbol(name)
-    Let(sym, t, fn(Var(sym, t.schema)))
+    Let(sym, t, fn(Var(sym, t.tpe)))
   }
 
-  def [S <: Data, T <: Data](t: Signal[S ~ T]) _1: Signal[S] = Left(t)
+  def [S <: Type, T <: Type](t: Signal[S ~ T]) _1: Signal[S] = Left(t)
 
-  def [S <: Data, T <: Data](t: Signal[S ~ T]) _2: Signal[T] = Right(t)
+  def [S <: Type, T <: Type](t: Signal[S ~ T]) _2: Signal[T] = Right(t)
 
-  def fsm[S <: Data, T <: Data](name: String, init: S)(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
+  def fsm[S <: Type, T <: Type](name: String, init: Value[S])(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
     val sym = Symbol(name)
-    Fsm(sym, init, next(Var(sym, init)))
+    Fsm(sym, init, next(Var(sym, typeOf(init))))
   }
 
-  def [T <: Data](data: T) toSignal: Signal[T] = data match {
-    case b: Bit => Lit(b).asInstanceOf
-    case l ~ r  => (l.toSignal ~ r.toSignal).asInstanceOf
+  def [T <: Type](value: Value[T]) toSignal: Signal[T] = value match {
+    case BitV(b)       => Lit(b).asInstanceOf
+    case PairV(l, r)   => (l.toSignal ~ r.toSignal).asInstanceOf
   }
 
-  inline def input[T <: Data](name: String): Signal[T] =
-    Var(Symbol(name), schemaOf[T])
+  inline def input[T <: Type](name: String): Signal[T] =
+    Var(Symbol(name), typeOf[T])
 
-  inline def schemaOf[T <: Data]: T = inline erasedValue[T] match {
-    case _: Bit        => true.asInstanceOf
-    case _: ~[t1, t2]  => (new ~(schemaOf[t1], schemaOf[t2])).asInstanceOf
-  }
-
-  def [S <: Data, T <: Data](lhs: S) ~ (rhs: T): S ~ T = new ~(lhs, rhs)
+  def [S <: Type, T <: Type](lhs: Value[S]) ~ (rhs: Value[T]): Value[S ~ T] =
+    new PairV(lhs, rhs)
 
   // Boolean -> Bits
-  implicit val lit: Conversion[Boolean, Signal[Bit]] = b => Lit(Bit(b))
+  implicit val lit: Conversion[Boolean, Signal[Bit]] = b => Lit(b)
 
   // ---------------- bit vector operations --------------------
   type Num = Int & Singleton
 
-  type Vec[N <: Num] <: Data = N match {
+  type Vec[N <: Num] <: Type = N match {
     case 1 => Bit
     case S[n] => Bit ~ Vec[n]
   }
 
   def [N <: Num](vec: Signal[Vec[N]]) size: N = {
-    def recur(schema: Data): Int = schema match {
+    def recur(tpe: Type): Int = tpe match {
       case _: Bit => 1
       case (_: Bit) ~ s =>  1 + recur(s)
     }
-    recur(vec.schema).asInstanceOf
+    recur(vec.tpe).asInstanceOf
   }
 
   private  def shiftImpl[N <: Num, M <: Num](vec: Signal[Vec[N]], amount: Signal[Vec[M]], isLeft: Boolean): Signal[Vec[N]] = {
@@ -139,16 +160,16 @@ object lang {
     val m: M = amount.size
 
     // index starts from least significant bit of `amount`
-    def recur(index: Int, toShift: Signal[Data]): Signal[Data] =
+    def recur(index: Int, toShift: Signal[Type]): Signal[Type] =
       if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
-        val padding = 0.toSignal(bitsToShift).as[Data]
+        val padding = 0.toSignal(bitsToShift).as[Type]
         val shifted =
-          if (isLeft) (toShift.range(bitsToShift, n) ~ padding).as[Data]
-          else (padding ~ toShift.range(0, n - bitsToShift)).as[Data]
+          if (isLeft) (toShift.range(bitsToShift, n) ~ padding).as[Type]
+          else (padding ~ toShift.range(0, n - bitsToShift)).as[Type]
 
-        val test: Signal[Data] =
+        val test: Signal[Type] =
           when (amount.at(index).as[Bit]) {
             shifted
           } otherwise {
@@ -157,7 +178,7 @@ object lang {
         recur(index + 1, test)
       }
 
-    recur(0, vec.as[Data]).asInstanceOf
+    recur(0, vec.as[Type]).asInstanceOf
   }
 
 
@@ -190,15 +211,15 @@ object lang {
   // sub
 
   // Int -> Bits
-  def (n: Int) toVec(N: Int): Vec[N.type] = {
+  def (n: Int) toValue(N: Int): Value[Vec[N.type]] = {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n > 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
 
-    var res: Data = null
+    var res: Value[_] = null
     var shift = 1 << N
     while (shift > 0) {
       val b = (n & (1 << shift)) == 0
-      res = if (res == null) Bit(b) else new ~(res, Bit(b))
+      res = if (res == null) BitV(b) else new PairV(res, BitV(b))
       shift = shift >> 1
     }
 
@@ -207,27 +228,27 @@ object lang {
 
   // Int -> Bits
   def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] =
-    n.toVec(N).toSignal[Vec[N.type]]
+    n.toValue(N).toSignal[Vec[N.type]]
 
   // ---------------- range operations --------------------
 
-  def [S <: Data](sig: Signal[S]) at(index: Int): Signal[_] = {
+  def [S <: Type](sig: Signal[S]) at(index: Int): Signal[_] = {
     assert(index >= 0)
     if (index == 0) sig.asInstanceOf
-    else sig.schema match {
-      case b: Bit  => throw new Exception("index out of range")
-      case s1 ~ s2 => sig.as[Data ~ Data]._2.at(index - 1)
+    else sig.tpe match {
+      case Bit     => throw new Exception("index out of range")
+      case s1 ~ s2 => sig.as[Type ~ Type]._2.at(index - 1)
     }
   }
 
-  def [S <: Data](sig: Signal[S]) range(from: Int, to: Int): Signal[_] = {
+  def [S <: Type](sig: Signal[S]) range(from: Int, to: Int): Signal[_] = {
     assert(from >= 0 && to >=0 && from < to)
-    def recur[T <: Data](sig: Signal[T], acc: Signal[_], curIndex: Int): Signal[_] = {
+    def recur[T <: Type](sig: Signal[T], acc: Signal[_], curIndex: Int): Signal[_] = {
       if (curIndex == to) acc
-      else sig.schema match {
+      else sig.tpe match {
         case b: Bit  => throw new Exception("index out of range")
         case s1 ~ s2 =>
-          val sig2 = sig.as[Data ~ Data]
+          val sig2 = sig.as[Type ~ Type]
           if (curIndex < from) recur(sig2._2, acc, curIndex + 1)
           else recur(sig2._2, if (acc == null) sig2._1 else acc ~ sig2._1, curIndex + 1)
       }
@@ -238,17 +259,17 @@ object lang {
   // ----------------  utilities --------------------
 
   // Tuple -> Pair
-  implicit def tuple2toPair[S <: Data, T <: Data]: Conversion[(Signal[S], Signal[T]), Signal[S ~ T]] =
+  implicit def tuple2toPair[S <: Type, T <: Type]: Conversion[(Signal[S], Signal[T]), Signal[S ~ T]] =
     t2 => t2._1 ~ t2._2
 
-  implicit def tuple3toPair[T1 <: Data, T2 <: Data, T3 <: Data]: Conversion[(Signal[T1], Signal[T2], Signal[T3]), Signal[T1 ~ T2 ~ T3]] =
+  implicit def tuple3toPair[T1 <: Type, T2 <: Type, T3 <: Type]: Conversion[(Signal[T1], Signal[T2], Signal[T3]), Signal[T1 ~ T2 ~ T3]] =
     t3 => t3._1 ~ t3._2 ~ t3._3
 
   def test1(cond: Signal[Bit], x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (!cond || x) && (cond || y)
-  def test[T <: Data](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = x.schema match {
+  def test[T <: Type](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = x.tpe match {
     case s1 ~ s2 =>
-      type T1 <: Data
-      type T2 <: Data
+      type T1 <: Type
+      type T2 <: Type
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
       val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
       (test(cond, x1._1, y1._1) ~ test(cond, x1._2, y1._2)).asInstanceOf
@@ -266,19 +287,19 @@ object lang {
    *
    *  }
    */
-  def when[T <: Data](cond: Signal[Bit])(x: => Signal[T]): WhenCont[T] =
+  def when[T <: Type](cond: Signal[Bit])(x: => Signal[T]): WhenCont[T] =
      WhenCont(r => test(cond, x, r))
-  class WhenCont[T <: Data](cont: Signal[T] => Signal[T]) {
+  class WhenCont[T <: Type](cont: Signal[T] => Signal[T]) {
     def otherwise(y: Signal[T]): Signal[T] = cont(y)
     def when (cond2: Signal[Bit])(z: Signal[T]): WhenCont[T] =
       WhenCont(r => cont(test(cond2, z, r)))
   }
 
   def equalBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x && y) || (!x && !y)
-  def [T <: Data](x: Signal[T]) === (y: Signal[T]): Signal[Bit] =  x.schema match {
+  def [T <: Type](x: Signal[T]) === (y: Signal[T]): Signal[Bit] =  x.tpe match {
     case s1 ~ s2 =>
-      type T1 <: Data
-      type T2 <: Data
+      type T1 <: Type
+      type T2 <: Type
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
       val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
       ??? // x1._1 === y1._1 && x1._2 === y1._2
