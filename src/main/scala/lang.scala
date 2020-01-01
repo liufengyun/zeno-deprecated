@@ -156,29 +156,35 @@ object lang {
     case S[n] => Bit ~ Vec[n]
   }
 
-  def [N <: Num](vec: Signal[Vec[N]]) size: N = {
+  def (vec: Signal[_]) size: Int = {
+    assert(isVec(vec.tpe))
+
     def recur(tpe: Type): Int = tpe match {
       case _: Bit => 1
       case (_: Bit) ~ s =>  1 + recur(s)
     }
-    recur(vec.tpe).asInstanceOf
+
+    recur(vec.tpe)
   }
 
-  private  def shiftImpl[N <: Num, M <: Num](vec: Signal[Vec[N]], amount: Signal[Vec[M]], isLeft: Boolean): Signal[Vec[N]] = {
-    val n: N = vec.size
-    val m: M = amount.size
+  private  def shiftImpl(vec: Signal[_], amount: Signal[_], isLeft: Boolean): Signal[_] = {
+    assert(isVec(vec.tpe))
+    assert(isVec(amount.tpe))
+
+    val n: Int = vec.size
+    val m: Int = amount.size
 
     // index starts from least significant bit of `amount`
-    def recur(index: Int, toShift: Signal[Vec[N]]): Signal[Vec[N]] =
+    def recur(index: Int, toShift: Signal[Type]): Signal[Type] =
       if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
-        val padding = 0.toSignal(bitsToShift).as[Vec[10]] // ignore 10: just for type checking
-        val shifted =
-          if (isLeft) (toShift.range(bitsToShift, n).as[Vec[10]] ++ padding).as[Vec[N]]
-          else (padding ++ toShift.range(0, n - bitsToShift).as[Vec[10]]).as[Vec[N]]
+        val padding = 0.toSignal(bitsToShift)
+        val shifted: Signal[Type] =
+          if (isLeft) (toShift.range(bitsToShift, n) ++ padding).as[Type]
+          else (padding ++ toShift.range(0, n - bitsToShift)).as[Type]
 
-        val test: Signal[Vec[N]] =
+        val test =
           when (amount.at(index).as[Bit]) {
             shifted
           } otherwise {
@@ -187,21 +193,24 @@ object lang {
         recur(index + 1, test)
       }
 
-    recur(0, vec)
+    recur(0, vec.as[Type])
   }
 
 
   /** logical shift left */
-  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) << (amount: Signal[Vec[M]]): Signal[Vec[N]] =
+  def (vec: Signal[_]) << (amount: Signal[_]): Signal[_] =
     shiftImpl(vec, amount, isLeft = true)
 
   /** logical shift  right */
-  def [N <: Num, M <: Num](vec: Signal[Vec[N]]) >> (amount: Signal[Vec[M]]): Signal[Vec[N]] =
+  def (vec: Signal[_]) >> (amount: Signal[_]): Signal[_] =
     shiftImpl(vec, amount, isLeft = false)
 
   /** unsigned addition, ripple-carry adder */
-  def [N <: Num](vec1: Signal[Vec[N]]) + (vec2: Signal[Vec[N]]): (Signal[Bit], Signal[Vec[N]]) = {
-    val n: N = vec1.size
+  def (vec1: Signal[_]) + (vec2: Signal[_]): (Signal[Bit], Signal[_]) = {
+    assert(isVec(vec1.tpe))
+    assert(isVec(vec2.tpe))
+
+    val n: Int = vec1.size
 
     // index starts from least significant bit
     def recur(index: Int, cin: Signal[Bit], acc: Signal[_]): (Signal[Bit], Signal[_]) =
@@ -214,12 +223,15 @@ object lang {
         recur(index + 1, cout, if (acc == null) s else s ~ acc)
       }
 
-    recur(0, lit(false), null).asInstanceOf
+    recur(0, lit(false), null)
   }
 
   /** unsigned subtraction */
-  def [N <: Num](vec1: Signal[Vec[N]]) - (vec2: Signal[Vec[N]]): (Signal[Bit], Signal[Vec[N]]) = {
-    val n: N = vec1.size
+  def (vec1: Signal[_]) - (vec2: Signal[_]): (Signal[Bit], Signal[_]) = {
+    assert(isVec(vec1.tpe))
+    assert(isVec(vec2.tpe))
+
+    val n: Int = vec1.size
 
     // index starts from least significant bit
     def recur(index: Int, bin: Signal[Bit], acc: Signal[_]): (Signal[Bit], Signal[_]) =
@@ -232,7 +244,7 @@ object lang {
         recur(index + 1, bout, if (acc == null) d else d ~ acc)
       }
 
-    recur(0, lit(false), null).asInstanceOf
+    recur(0, lit(false), null)
   }
 
   /** Int -> Bits */
@@ -263,7 +275,6 @@ object lang {
     sig1.tpe match {
       case Bit      => sig1 ~ sig2
       case Bit ~ t2 => sig1.as[Bit ~ Bit].left ~ (sig1.as[Bit ~ Bit].right ++ sig2)
-      case _        => ??? // impossible
     }
   }
 
