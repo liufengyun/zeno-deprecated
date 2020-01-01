@@ -1,10 +1,9 @@
+package ysm
+
 object Main {
 
   def main(args: Array[String]): Unit = {
-    println("Hello world!")
-    println(msg)
+    Controller.test(args(0))
   }
-
-  def msg = "I was compiled by dotty :)"
 
 }

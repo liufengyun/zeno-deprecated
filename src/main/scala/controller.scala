@@ -198,4 +198,84 @@ object Controller {
       }
     }
   }
+
+  def test(file: String): Unit = {
+    val busIn = input[BusIn]("busIn")
+    val instructions = Assembler.assemble(file)
+    val code = processor(instructions, busIn)
+    println(show(code))
+  }
+}
+
+
+object Assembler {
+  import scala.io.Source
+  import ISA._
+
+  def assemble(progPath: String): Array[Int] = {
+    println("parsing file " + progPath)
+
+    val source = Source.fromFile(progPath)
+
+    val lines = source.getLines().toList.map(_.trim).filter { line =>
+      !line.isEmpty && !line.startsWith("//")
+    }
+
+    // println("effective lines = " + lines.size)
+    // println(lines.mkString("\n"))
+
+    val Label = "(.*):".r
+    var addr: Int = 0
+    val symbols = lines.foldLeft(Map.empty[String, Int]) {
+      case (acc, Label(l)) => acc + (l -> addr)
+      case (acc, _)        => addr += 1; acc
+    }
+
+    println("labels: " + symbols)
+
+    def toInt(s: String): Int = {
+      // TODO: check valid range of the argument
+      if (s.startsWith("0x")) {
+        Integer.parseInt(s.substring(2), 16)
+      } else {
+        Integer.parseInt(s)
+      }
+    }
+
+    def address(s: String): Int = {
+      s.toInt
+    }
+
+    println("lines size = " + lines.size)
+
+    val instructions = for (line <- lines if !line.matches("(.*:)")) yield {
+      val tokens = line.split("\\s+")
+      tokens(0) match {
+        case "nop"     => NOP
+        case "add"     => (ADD    << 8) + address(tokens(1))
+        case "sub"     => (SUB    << 8) + address(tokens(1))
+        case "and"     => (AND    << 8) + address(tokens(1))
+        case "or"      => (OR     << 8) + address(tokens(1))
+        case "xor"     => (XOR    << 8) + address(tokens(1))
+        case "addi"    => (ADDI   << 8) + toInt(tokens(1))
+        case "subi"    => (SUBI   << 8) + toInt(tokens(1))
+        case "andi"    => (ANDI   << 8) + toInt(tokens(1))
+        case "ori"     => (ORI    << 8) + toInt(tokens(1))
+        case "xori"    => (XORI   << 8) + toInt(tokens(1))
+        case "shr"     => (SHR    << 8) + toInt(tokens(1))
+        case "shl"     => (SHL    << 8) + toInt(tokens(1))
+        case "load"    => (LD     << 8) + address(tokens(1))
+        case "loadi"   => (LDI    << 8) + toInt(tokens(1))
+        case "store"   => (ST     << 8) + address(tokens(1))
+        case "br"      => (BR     << 8) + symbols(tokens(1))
+        case "brz"     => (BRZ    << 8) + symbols(tokens(1))
+        case "brnz"    => (BRNZ   << 8) + symbols(tokens(1))
+        case t: String => throw new Exception("Assembler error: unknown instruction: " + t)
+      }
+    }
+
+    println("instr size: " + instructions.size)
+
+    instructions.toArray
+  }
 }
