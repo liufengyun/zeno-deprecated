@@ -26,11 +26,11 @@ object lang {
 
   sealed trait Value[T <: Type]
 
-  case class BitV(value: Boolean) extends Value[Bit]
+  case class BitV(value: 0 | 1) extends Value[Bit]
 
   case class PairV[S <: Type, T <: Type](lhs: Value[S], rhs: Value[T]) extends Value[S ~ T]
 
-  case class VecV[T <: Num](map: Int => Boolean, size: Int) extends Value[Vec[T]]
+  case class VecV[T <: Num](map: Int => 0 | 1, size: Int) extends Value[Vec[T]]
 
   // ---------------- abstract syntax trees --------------------
 
@@ -88,8 +88,11 @@ object lang {
   }
 
   /** Empty vector */
-  object EmptyVec extends Signal[Vec[0]] {
-    val tpe: Type = Vec(0)
+  case class VecLit[T <: Num](bits: List[0 | 1]) extends Signal[Vec[T]] {
+    val tpe: Type = {
+      val size = bits.size
+      Vec(size)
+    }
   }
 
   case class Cons[T <: Num, U <: Num](sig: Signal[Bit], vec: Signal[Vec[T]]) extends Signal[Vec[U]] {
@@ -112,7 +115,7 @@ object lang {
     }
   }
 
-  case class Lit(value: Boolean) extends Signal[Bit] {
+  case class Lit(value: 0 | 1) extends Signal[Bit] {
     val tpe: Type = Bit
   }
 
@@ -173,12 +176,17 @@ object lang {
     Fsm(sym, init, next(Var(sym, typeOf(init))))
   }
 
-  def vec(): Signal[Vec[0]] = EmptyVec
+  val vecEmpty: Signal[Vec[0]] = VecLit[0](Nil)
+
+  def vec[T <: Num](bits: (1 | 0)*): Signal[Vec[T]] =
+    VecLit[T](bits.toList)
 
   def [T <: Type](value: Value[T]) toSignal: Signal[T] = value match {
     case BitV(b)       => Lit(b).asInstanceOf
     case PairV(l, r)   => (l.toSignal ~ r.toSignal).asInstanceOf
-    case VecV(map, s)  => (0 until s).map(i => lit(map(i)) ).foldLeft(vec()) { (acc, b) => b :: acc }.asInstanceOf
+    case VecV(map, s)  =>
+      val bits: List[0 | 1] = (0 until s).map[0 | 1](i => map(i)).toList
+      VecLit(bits).asInstanceOf
   }
 
   inline def input[T <: Type](name: String): Signal[T] =
@@ -188,9 +196,9 @@ object lang {
     new PairV(lhs, rhs)
 
   // Boolean -> Bits
-  implicit val lit: Conversion[Boolean, Signal[Bit]] = b => Lit(b)
-  implicit val lit1: Conversion[1, Signal[Bit]] = one => Lit(true)
-  implicit val lit0: Conversion[0, Signal[Bit]] = zero => Lit(false)
+  implicit val lit: Conversion[Boolean, Signal[Bit]] = b => Lit(if b then 1 else 0)
+  implicit val lit1: Conversion[1, Signal[Bit]] = one => Lit(1)
+  implicit val lit0: Conversion[0, Signal[Bit]] = zero => Lit(0)
 
   // ---------------- bit vector operations --------------------
 
@@ -246,7 +254,7 @@ object lang {
         recur(index + 1, cout, (s :: acc.as[Vec[N]]).asInstanceOf)
       }
 
-    recur(0, lit(false), vec().as[Vec[_]])._2
+    recur(0, lit(false), vecEmpty.as[Vec[_]])._2
   }
 
   /** unsigned subtraction */
@@ -264,7 +272,7 @@ object lang {
         recur(index + 1, bout, (d :: acc.as[Vec[N]]).asInstanceOf)
       }
 
-    recur(0, lit(false), vec().as[Vec[_]])._2
+    recur(0, lit(false), vecEmpty.as[Vec[_]])._2
   }
 
   /** Int -> Bits */
@@ -272,12 +280,17 @@ object lang {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n > 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
 
-    VecV(i => (n & (1 << i)) != 0, N)
+    VecV(i => if (n & (1 << i)) == 0 then 0 else 1, N)
   }
 
-  /** Int -> Bits */
-  def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] =
-    n.toValue(N).toSignal[Vec[N.type]]
+  /** Int -> Bits, take the least significant N bits */
+  def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] = {
+    val bits = (0 until N).foldLeft(Nil: List[0|1]) { (acc, i) =>
+      val bit: 0 | 1 = if (n & (1 << i)) == 0 then 0 else 1
+      bit :: acc
+    }
+    VecLit(bits)
+  }
 
   def [N <: Num, U <: Num](sig: Signal[Bit]) :: (vec: Signal[Vec[N]]): Signal[Vec[U]] = Cons[N, U](sig, vec)
 
@@ -309,7 +322,7 @@ object lang {
       (test(cond, x1.left, y1.left) ~ test(cond, x1.right, y1.right)).asInstanceOf
 
     case Vec(n) =>
-      (0 until n).foldLeft(vec()) { (acc, i) =>
+      (0 until n).foldLeft(vecEmpty) { (acc, i) =>
         test1(cond, x.as[Vec[n.type]].at(i), y.as[Vec[n.type]].at(i)) :: acc
       }.asInstanceOf
 
