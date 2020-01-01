@@ -93,9 +93,8 @@ object Controller {
     val defaultBusOut: Signal[BusOut] = 0.toSignal(8) ~ 0 ~ 0 ~ 0.toSignal(32)
 
     fsm("processor", pcInit ~ accInit ~ lastInit) { (state: Signal[PC ~ ACC ~ INSTR]) =>
-      val pc = state.left.left
-      val acc = state.left.right
-      val lastInstr = state.right
+      val pc ~ acc ~ lastInstr = state
+
       let("pcNext", (pc + 1.toSignal(addrWidth)).as[PC]) { pcNext =>
 
         let("instr", instrMemory(addrWidth, prog, pc)) { instr =>

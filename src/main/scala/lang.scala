@@ -15,9 +15,10 @@ object lang {
 
   sealed trait Type
   object Bit extends Type
-  case class ~[S <: Type, T <: Type](lhs: S, rhs: T) extends Type
+  case class Pair[S <: Type, T <: Type](lhs: S, rhs: T) extends Type
   case class Vec[T <: Num](size: T) extends Type
 
+  type ~[S <: Type, T <: Type] = Pair[S, T]
   type Bit = Bit.type
   type Num = Int & Singleton
 
@@ -41,7 +42,7 @@ object lang {
     def & (rhs: Signal[T]): Signal[T] = And(this, rhs)
     def | (rhs: Signal[T]): Signal[T] = Or(this, rhs)
     def ^ (rhs: Signal[T]): Signal[T] = Or(And(this, !rhs), And(!this, rhs))
-    def ~[U <: Type](rhs: Signal[U]): Signal[T ~ U] = Pair(this, rhs)
+    def ~[U <: Type](rhs: Signal[U]): Signal[T ~ U] = Par(this, rhs)
 
     def as[S <: Type]: Signal[S] = {
       // TODO: add dynamic check
@@ -51,20 +52,20 @@ object lang {
     def tpe: Type
   }
 
-  case class Pair[S <: Type, T <: Type](lhs: Signal[S], rhs: Signal[T]) extends Signal[S ~ T] {
-    val tpe: Type = new ~(lhs.tpe, rhs.tpe)
+  case class Par[S <: Type, T <: Type](lhs: Signal[S], rhs: Signal[T]) extends Signal[S ~ T] {
+    val tpe: Type = new Pair(lhs.tpe, rhs.tpe)
   }
 
   case class Left[S <: Type, T <: Type](pair: Signal[S ~ T]) extends Signal[S] {
     val tpe: Type = pair.tpe match {
-      case s1 ~ s2 => s1
+      case Pair(t1, t2) => t1
       case _ => ???  // impossible
     }
   }
 
   case class Right[S <: Type, T <: Type](pair: Signal[S ~ T]) extends Signal[T] {
     val tpe: Type = pair.tpe match {
-      case s1 ~ s2 => s2
+      case Pair(t1, t2) => t2
       case _ => ???  // impossible
     }
   }
@@ -106,7 +107,7 @@ object lang {
 
   case class Fsm[S <: Type, T <: Type](sym: Symbol, init: Value[S], body: Signal[S ~ T]) extends Signal[T] {
     val tpe: Type = body.tpe match {
-      case s1 ~ s2 => s2
+      case Pair(t1, t2) => t2
       case _ => ???  // impossible
     }
   }
@@ -138,7 +139,7 @@ object lang {
       Bit.asInstanceOf
 
     case _: ~[t1, t2]  =>
-      (new ~(typeOf[t1], typeOf[t2])).asInstanceOf
+      (new Pair(typeOf[t1], typeOf[t2])).asInstanceOf
 
     case _: Vec[n]     =>
       val size = valueOf[n]
@@ -161,6 +162,11 @@ object lang {
   def [S <: Type, T <: Type](t: Signal[S ~ T]) left: Signal[S] = Left(t)
 
   def [S <: Type, T <: Type](t: Signal[S ~ T]) right: Signal[T] = Right(t)
+
+  object ~ {
+    def unapply[S <: Type, T <: Type](sig: Signal[S ~ T]): (Signal[S], Signal[T]) =
+      (sig.left, sig.right)
+  }
 
   def fsm[S <: Type, T <: Type](name: String, init: Value[S])(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
     val sym = Symbol(name)
@@ -295,7 +301,7 @@ object lang {
 
   def test1(cond: Signal[Bit], x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (!cond | x) & (cond | y)
   def test[T <: Type](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = x.tpe match {
-    case s1 ~ s2 =>
+    case Pair(t1, t2) =>
       type T1 <: Type
       type T2 <: Type
       val x1 = x.as[T1 ~ T2]
@@ -331,7 +337,7 @@ object lang {
 
   def equalBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x & y) | (!x & !y)
   def [T <: Type](x: Signal[T]) === (y: Signal[T]): Signal[Bit] =  x.tpe match {
-    case s1 ~ s2 =>
+    case Pair(t1, t2) =>
       type T1 <: Type
       type T2 <: Type
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
