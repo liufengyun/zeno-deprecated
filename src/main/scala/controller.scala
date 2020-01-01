@@ -52,7 +52,7 @@ object Controller {
     (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
       when[Vec[16]] (addr === curAddr.toSignal(addrWidth)) {
         if (curAddr < prog.size) prog(curAddr).toSignal(16)
-        else acc
+        else default
       } otherwise {
         acc
       }

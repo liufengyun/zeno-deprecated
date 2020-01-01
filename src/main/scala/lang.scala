@@ -498,7 +498,7 @@ object lang {
         case Let(sym, sig, body) =>
           indented {
             padding + "let " + sym.name + ": " + show(sig.tpe)  +  " = " + recur(sig) +
-            padding + " in" +
+            padding + "in" +
             padding + indented { recur(body) }
           }
 
