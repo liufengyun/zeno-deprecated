@@ -53,11 +53,11 @@ object lang {
     }
   }
 
+  var count = 0
+
   sealed trait Signal[T <: Type] {
-    def unary_! : Signal[T] = Not(this)
-    def & (rhs: Signal[T]): Signal[T] = And(this, rhs)
-    def | (rhs: Signal[T]): Signal[T] = Or(this, rhs)
-    def ^ (rhs: Signal[T]): Signal[T] = Or(And(this, !rhs), And(!this, rhs))
+    count += 1
+
     def ~[U <: Type](rhs: Signal[U]): Signal[T ~ U] = Par(this, rhs)
 
     def as[S <: Type]: Signal[S] = {
@@ -150,6 +150,39 @@ object lang {
     val tpe: Type = in.tpe
   }
 
+  /** vec1 ++ vec2. Used to reduce program size */
+  case class Concat[S <: Num, T <: Num, U <: Num](vec1: Signal[Vec[S]], vec2: Signal[Vec[T]]) extends Signal[Vec[U]] {
+    val tpe: Type = {
+      val size = vec1.size + vec2.size
+      Vec(size)
+    }
+  }
+
+  /** vec1 === vec2. Used to reduce program size */
+  case class Equals[T <: Type](vec1: Signal[T], vec2: Signal[T]) extends Signal[Bit] {
+    val tpe: Type = Bit
+  }
+
+  /** vec1 + vec2. Used to reduce program size */
+  case class Plus[T <: Num](vec1: Signal[Vec[T]], vec2: Signal[Vec[T]]) extends Signal[Vec[T]] {
+    val tpe: Type = vec1.tpe
+  }
+
+  /** vec1 + vec2. Used to reduce program size */
+  case class Minus[T <: Num](vec1: Signal[Vec[T]], vec2: Signal[Vec[T]]) extends Signal[Vec[T]] {
+    val tpe: Type = vec1.tpe
+  }
+
+  /** if (c) x else y. Used to reduce program size  */
+  case class Mux[T <: Type](cond: Signal[Bit], vec1: Signal[T], vec2: Signal[T]) extends Signal[T] {
+    val tpe: Type = vec1.tpe
+  }
+
+  /** x << y and x >> y. Used to reduce program size  */
+  case class Shift[S <: Num, T <: Num](vec: Signal[Vec[S]], amount: Signal[Vec[T]], isLeft: Boolean) extends Signal[Vec[S]] {
+    val tpe: Type = vec.tpe
+  }
+
   case class Circuit[S <: Type, T <: Type](in: Var[S], body: Signal[T])
 
   // ---------------- type operations --------------------
@@ -193,10 +226,15 @@ object lang {
     Fsm(sym, init, next(Var(sym, typeOf(init))))
   }
 
-  val vecEmpty: Signal[Vec[0]] = VecLit[0](Nil)
+  def mux[T <: Type](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = Mux(cond, x, y)
 
-  def vec[T <: Num](bits: (1 | 0)*): Signal[Vec[T]] =
-    VecLit[T](bits.toList)
+  def [T <: Type](sig: Signal[T]) unary_! : Signal[T] = Not(sig)
+
+  def [T <: Type](lhs: Signal[T]) & (rhs: Signal[T]): Signal[T] = And(lhs, rhs)
+
+  def [T <: Type](lhs: Signal[T]) | (rhs: Signal[T]): Signal[T] = Or(lhs, rhs)
+
+  def [T <: Type](lhs: Signal[T]) ^ (rhs: Signal[T]): Signal[T] = Or(And(lhs, !rhs), And(!lhs, rhs))
 
   def [T <: Type](value: Value[T]) toSignal: Signal[T] = value match {
     case BitV(b)       => BitLit(b).asInstanceOf
@@ -217,7 +255,51 @@ object lang {
   implicit val lit1: Conversion[1, Signal[Bit]] = one => BitLit(1)
   implicit val lit0: Conversion[0, Signal[Bit]] = zero => BitLit(0)
 
+  /** Int -> Bits */
+  def (n: Int) toValue(N: Int): Value[Vec[N.type]] = {
+    assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
+    assert(n >= 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
+
+    VecV(i => if (n & (1 << i)) == 0 then 0 else 1, N)
+  }
+
+  /** Int -> Bits, take the least significant N bits */
+  def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] = {
+    val bits = (0 until N).foldLeft(Nil: List[0|1]) { (acc, i) =>
+      val bit: 0 | 1 = if (n & (1 << i)) == 0 then 0 else 1
+      bit :: acc
+    }
+    VecLit(bits)
+  }
+
   // ---------------- bit vector operations --------------------
+
+  def [M <: Num, N <: Num](vec: Signal[Vec[M]]) << (amount: Signal[Vec[N]]): Signal[Vec[M]] =
+    Shift(vec, amount, isLeft = true)
+
+  def [M <: Num, N <: Num](vec: Signal[Vec[M]]) >> (amount: Signal[Vec[N]]): Signal[Vec[M]] =
+    Shift(vec, amount, isLeft = false)
+
+  def [N <: Num](vec1: Signal[Vec[N]]) + (vec2: Signal[Vec[N]]): Signal[Vec[N]] =
+    Plus(vec1, vec2)
+
+  def [N <: Num](vec1: Signal[Vec[N]]) - (vec2: Signal[Vec[N]]): Signal[Vec[N]] =
+    Minus(vec1, vec2)
+
+  val vecEmpty: Signal[Vec[0]] = VecLit[0](Nil)
+
+  def vec[T <: Num](bits: (1 | 0)*): Signal[Vec[T]] =
+    VecLit[T](bits.toList)
+
+  def [N <: Num, U <: Num](sig: Signal[Bit]) :: (vec: Signal[Vec[N]]): Signal[Vec[U]] = Cons[N, U](sig, vec)
+
+  def [M <: Num, N <: Num, U <: Num](sig1: Signal[Vec[M]]) ++ (sig2: Signal[Vec[N]]): Signal[Vec[U]] = Concat(sig1, sig2)
+
+  def [S <: Num](vec: Signal[Vec[S]]) apply(index: Int): Signal[Bit] = At(vec, index)
+
+  def [S <: Num, U <: Num](vec: Signal[Vec[S]]) apply(from: Int, to: Int): Signal[Vec[U]] = Range[S, U](vec, from, to)
+
+  def [T <: Num](x: Signal[Vec[T]]) === (y: Signal[Vec[T]]): Signal[Bit] = Equals(x, y)
 
   def [N <: Num](vec: Signal[Vec[N]]) size: Int = vec.tpe.asInstanceOf[Vec[N]].size
 
@@ -249,15 +331,15 @@ object lang {
 
 
   /** logical shift left */
-  def [M <: Num, N <: Num](vec: Signal[Vec[M]]) << (amount: Signal[Vec[N]]): Signal[Vec[M]] =
+  def shiftLeft[M <: Num, N <: Num](vec: Signal[Vec[M]], amount: Signal[Vec[N]]): Signal[Vec[M]] =
     shiftImpl(vec, amount, isLeft = true)
 
   /** logical shift  right */
-  def [M <: Num, N <: Num](vec: Signal[Vec[M]]) >> (amount: Signal[Vec[N]]): Signal[Vec[M]] =
+  def shiftRight[M <: Num, N <: Num](vec: Signal[Vec[M]], amount: Signal[Vec[N]]): Signal[Vec[M]] =
     shiftImpl(vec, amount, isLeft = false)
 
   /** unsigned addition, ripple-carry adder */
-  def [N <: Num](vec1: Signal[Vec[N]]) + (vec2: Signal[Vec[N]]): Signal[Vec[N]] = {
+  def plus[N <: Num](vec1: Signal[Vec[N]], vec2: Signal[Vec[N]]): Signal[Vec[N]] = {
     val n: Int = vec1.size
 
     // index starts from least significant bit
@@ -275,7 +357,7 @@ object lang {
   }
 
   /** unsigned subtraction */
-  def [N <: Num](vec1: Signal[Vec[N]]) - (vec2: Signal[Vec[N]]): Signal[Vec[N]] = {
+  def minus[N <: Num](vec1: Signal[Vec[N]], vec2: Signal[Vec[N]]): Signal[Vec[N]] = {
     val n: Int = vec1.size
 
     // index starts from least significant bit
@@ -292,34 +374,34 @@ object lang {
     recur(0, lit(false), vecEmpty.as[Vec[_]])._2
   }
 
-  /** Int -> Bits */
-  def (n: Int) toValue(N: Int): Value[Vec[N.type]] = {
-    assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
-    assert(n >= 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
-
-    VecV(i => if (n & (1 << i)) == 0 then 0 else 1, N)
-  }
-
-  /** Int -> Bits, take the least significant N bits */
-  def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] = {
-    val bits = (0 until N).foldLeft(Nil: List[0|1]) { (acc, i) =>
-      val bit: 0 | 1 = if (n & (1 << i)) == 0 then 0 else 1
-      bit :: acc
-    }
-    VecLit(bits)
-  }
-
-  def [N <: Num, U <: Num](sig: Signal[Bit]) :: (vec: Signal[Vec[N]]): Signal[Vec[U]] = Cons[N, U](sig, vec)
-
   /** Concat two bit vectors */
-  def [M <: Num, N <: Num, U <: Num](sig1: Signal[Vec[M]]) ++ (sig2: Signal[Vec[N]]): Signal[Vec[U]] =
+  def concat[M <: Num, N <: Num, U <: Num](sig1: Signal[Vec[M]], sig2: Signal[Vec[N]]): Signal[Vec[U]] = {
+    def recur(from: Int, to: Int): Signal[Vec[N]] =
+      if (from == to) sig1(from) :: sig2
+      else sig1(to) :: recur(from, to - 1)
+
     if (sig1.size == 0) sig2.as[Vec[U]]
     else if (sig1.size == 1) sig1(0) :: sig2
-    else sig1(sig1.size - 1) :: (sig1(0, sig1.size - 2) ++ sig2)
+    else sig1(sig1.size - 1) :: (recur(0, sig1.size - 2))
+  }
 
-  def [S <: Num](vec: Signal[Vec[S]]) apply(index: Int): Signal[Bit] = At(vec, index)
+  def equalsBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x & y) | (!x & !y)
+  def equals[T <: Type](x: Signal[T], y: Signal[T]): Signal[Bit] =  x.tpe match {
+    case Pair(t1, t2) =>
+      type T1 <: Type
+      type T2 <: Type
+      val x1 = x.as[T1 ~ T2]
+      val y1 = y.as[T1 ~ T2]
+      equals(x1.left, y1.left) & equals(x1.right, y1.right)
 
-  def [S <: Num, U <: Num](vec: Signal[Vec[S]]) apply(from: Int, to: Int): Signal[Vec[U]] = Range[S, U](vec, from, to)
+    case Vec(n) =>
+      (0 until n).map { i =>
+        equalsBit(x.as[Vec[n.type]](i), y.as[Vec[n.type]](i))
+      }.reduce(_ & _)
+
+    case _ =>
+      equalsBit(x.as[Bit], y.as[Bit])
+  }
 
   // ----------------  utilities --------------------
 
@@ -337,7 +419,7 @@ object lang {
       type T2 <: Type
       val x1 = x.as[T1 ~ T2]
       val y1 = y.as[T1 ~ T2]
-      (test(cond, x1.left, y1.left) ~ test(cond, x1.right, y1.right)).as[T]
+      (mux(cond, x1.left, y1.left) ~ mux(cond, x1.right, y1.right)).as[T]
 
     case Vec(n) =>
       val xSize = x.as[Vec[0]].size
@@ -363,36 +445,12 @@ object lang {
    *  }
    */
   def when[T <: Type](cond: Signal[Bit])(x: Signal[T]): WhenCont[T] =
-    WhenCont { r =>
-      let("x", x) { x => test(cond, x, r) }
-    }
+    WhenCont { r => mux(cond, x, r) }
   class WhenCont[T <: Type](cont: Signal[T] => Signal[T]) {
-    def otherwise(y: Signal[T]): Signal[T] =
-      let("y", y) { y => cont(y) }
+    def otherwise(y: Signal[T]): Signal[T] = cont(y)
 
     def when (cond2: Signal[Bit])(y: Signal[T]): WhenCont[T] =
-      WhenCont { r =>
-        let("y", y) { y => cont(test(cond2, y, r)) }
-      }
-  }
-
-  def equalBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x & y) | (!x & !y)
-  def [T <: Type](x: Signal[T]) === (y: Signal[T]): Signal[Bit] =  x.tpe match {
-    case Pair(t1, t2) =>
-      type T1 <: Type
-      type T2 <: Type
-      val x1 = x.as[T1 ~ T2]
-      val y1 = y.as[T1 ~ T2]
-      (x1.left === y1.left) & (x1.right === y1.right)
-
-    case Vec(n) =>
-      (0 until n).map { i =>
-        equalBit(x.as[Vec[n.type]](i), y.as[Vec[n.type]](i))
-      }.reduce(_ & _)
-
-
-    case _ =>
-      equalBit(x.as[Bit], y.as[Bit])
+      WhenCont { r => cont(mux(cond2, y, r)) }
   }
 
   // ---------------- pretty print --------------------
@@ -400,7 +458,7 @@ object lang {
   def show[T <: Type](sig: Signal[T]): String = {
     var indent = 0
 
-    def padding: String = "\n" + (" " * indent)
+    def padding: String = "\n" + ("  " * indent)
 
     def indented(str: => String): String = {
       indent += 1
@@ -411,7 +469,7 @@ object lang {
 
     def recur[T <: Type](sig: Signal[T]): String =
       sig match {
-        case Par(lhs, rhs) => recur(lhs) + "~" + recur(rhs)
+        case Par(lhs, rhs) => recur(lhs) + " ~ " + recur(rhs)
 
         case Left(pair)    => recur(pair) + ".1"
 
@@ -420,13 +478,16 @@ object lang {
         case At(vec, i)    => recur(vec) + "(" + i + ")"
 
         case Range(vec, from, to) =>
-          recur(vec) + "(" + from + "," + to + ")"
+          recur(vec) + "(" + from + ", " + to + ")"
 
         case VecLit(bits)   =>
           bits.map(_.toString).mkString("")
 
         case Cons(bit, vec) =>
           recur(bit) + " :: " + recur(vec)
+
+        case Concat(vec1, vec2) =>
+          recur(vec1) + " ++ " + recur(vec2)
 
         case BitLit(value)     =>
           value.toString
@@ -436,8 +497,9 @@ object lang {
 
         case Let(sym, sig, body) =>
           indented {
-            padding + "let " + sym.name + ": " + show(sig.tpe)  +  " = " + recur(sig) + " in" +
-            padding + recur(body)
+            padding + "let " + sym.name + ": " + show(sig.tpe)  +  " = " + recur(sig) +
+            padding + " in" +
+            padding + indented { recur(body) }
           }
 
         case Fsm(sym, init, body) =>
@@ -445,6 +507,25 @@ object lang {
             padding + "fsm { " + show(init) + " | " + sym.name + " => " +
             padding + indented(show(body)) +
             padding + "}"
+          }
+
+        case Equals(vec1, vec2) =>
+          recur(vec1) + "===" + recur(vec2)
+
+        case Plus(vec1, vec2) =>
+          recur(vec1) + " + " + recur(vec2)
+
+        case Minus(vec1, vec2) =>
+          recur(vec1) + " - " + recur(vec2)
+
+        case Shift(vec, amount, isLeft) =>
+          val dir = if (isLeft) " << " else " >> "
+          recur(vec) + dir + recur(amount)
+
+        case Mux(cond, vec1, vec2) =>
+          indented {
+            padding + "if (" + recur(cond) + ") " + recur(vec1) +
+            padding + "else " + recur(vec2)
           }
 
         case And(lhs, rhs)  =>

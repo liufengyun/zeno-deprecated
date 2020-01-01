@@ -204,6 +204,7 @@ object Controller {
     val busIn = input[BusIn]("busIn")
     val instructions = Assembler.assemble(file)
     val code = processor(instructions, busIn)
+    println(count)
     println(show(code))
   }
 }
