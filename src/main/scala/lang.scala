@@ -16,8 +16,10 @@ object lang {
   sealed trait Type
   object Bit extends Type
   case class ~[S <: Type, T <: Type](lhs: S, rhs: T) extends Type
+  case class Vec[T <: Num](size: T) extends Type
 
   type Bit = Bit.type
+  type Num = Int & Singleton
 
   // ---------------- values of signal --------------------
 
@@ -26,6 +28,8 @@ object lang {
   case class BitV(value: Boolean) extends Value[Bit]
 
   case class PairV[S <: Type, T <: Type](lhs: Value[S], rhs: Value[T]) extends Value[S ~ T]
+
+  case class VecV[T <: Num](map: Int => Boolean, size: Int) extends Value[Vec[T]]
 
   // ---------------- abstract syntax trees --------------------
 
@@ -65,6 +69,35 @@ object lang {
     }
   }
 
+  case class At[T <: Num](vec: Signal[Vec[T]], index: Int) extends Signal[Bit] {
+    assert(index < vec.size)
+
+    val tpe: Type = Bit
+  }
+
+  case class Range[T <: Num, S <: Num](vec: Signal[Vec[T]], from: Int, to: Int) extends Signal[Vec[S]] {
+    assert(from < vec.size && from >= 0)
+    assert(to < vec.size && from >= 0)
+    assert(from <= to)
+
+    val tpe: Type = {
+      val size = to - from + 1
+      Vec(size)
+    }
+  }
+
+  /** Empty vector */
+  object EmptyVec extends Signal[Vec[0]] {
+    val tpe: Type = Vec(0)
+  }
+
+  case class Cons[T <: Num, U <: Num](sig: Signal[Bit], vec: Signal[Vec[T]]) extends Signal[Vec[U]] {
+    val tpe: Type = {
+      val size = vec.size + 1
+      Vec(size)
+    }
+  }
+
   case class Var[T <: Type](sym: Symbol, tpe: Type) extends Signal[T]
 
   case class Let[S <: Type, T <: Type](sym: Symbol, sig: Signal[S],  body: Signal[T]) extends Signal[T] {
@@ -101,19 +134,21 @@ object lang {
   // ---------------- type operations --------------------
 
   inline def typeOf[T <: Type]: T = inline erasedValue[T] match {
-    case Bit           => Bit.asInstanceOf
-    case _: ~[t1, t2]  => (new ~(typeOf[t1], typeOf[t2])).asInstanceOf
+    case Bit           =>
+      Bit.asInstanceOf
+
+    case _: ~[t1, t2]  =>
+      (new ~(typeOf[t1], typeOf[t2])).asInstanceOf
+
+    case _: Vec[n]     =>
+      val size = valueOf[n]
+      Vec(size).asInstanceOf
   }
 
   def typeOf[T <: Type](value: Value[T]): T = value match {
     case _: BitV      => Bit
     case PairV(l, r)  => new ~(typeOf(l), typeOf(r))
-  }
-
-  def isVec(tpe: Type): Boolean = tpe match {
-    case Bit      => true
-    case Bit ~ t2 => isVec(t2)
-    case _        => false
+    case VecV(_, s)   => Vec(s).asInstanceOf
   }
 
   // ---------------- constructors --------------------
@@ -132,9 +167,12 @@ object lang {
     Fsm(sym, init, next(Var(sym, typeOf(init))))
   }
 
+  def vec(): Signal[Vec[0]] = EmptyVec
+
   def [T <: Type](value: Value[T]) toSignal: Signal[T] = value match {
     case BitV(b)       => Lit(b).asInstanceOf
     case PairV(l, r)   => (l.toSignal ~ r.toSignal).asInstanceOf
+    case VecV(map, s)  => (0 until s).map(i => lit(map(i)) ).foldLeft(vec()) { (acc, b) => b :: acc }.asInstanceOf
   }
 
   inline def input[T <: Type](name: String): Signal[T] =
@@ -149,40 +187,22 @@ object lang {
   implicit val lit0: Conversion[0, Signal[Bit]] = zero => Lit(false)
 
   // ---------------- bit vector operations --------------------
-  type Num = Int & Singleton
 
-  type Vec[N <: Num] <: Type = N match {
-    case 1 => Bit
-    case S[n] => Bit ~ Vec[n]
-  }
+  def [N <: Num](vec: Signal[Vec[N]]) size: Int = vec.tpe.asInstanceOf[Vec[N]].size
 
-  def (vec: Signal[_]) size: Int = {
-    assert(isVec(vec.tpe))
-
-    def recur(tpe: Type): Int = tpe match {
-      case _: Bit => 1
-      case (_: Bit) ~ s =>  1 + recur(s)
-    }
-
-    recur(vec.tpe)
-  }
-
-  private  def shiftImpl(vec: Signal[_], amount: Signal[_], isLeft: Boolean): Signal[_] = {
-    assert(isVec(vec.tpe))
-    assert(isVec(amount.tpe))
-
+  private  def shiftImpl[M <: Num, N <: Num](vec: Signal[Vec[M]], amount: Signal[Vec[N]], isLeft: Boolean): Signal[Vec[M]] = {
     val n: Int = vec.size
     val m: Int = amount.size
 
     // index starts from least significant bit of `amount`
-    def recur(index: Int, toShift: Signal[Type]): Signal[Type] =
+    def recur(index: Int, toShift: Signal[Vec[M]]): Signal[Vec[M]] =
       if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
         val padding = 0.toSignal(bitsToShift)
-        val shifted: Signal[Type] =
-          if (isLeft) (toShift.range(bitsToShift, n) ++ padding).as[Type]
-          else (padding ++ toShift.range(0, n - bitsToShift)).as[Type]
+        val shifted: Signal[Vec[M]] =
+          if (isLeft) (toShift.range(bitsToShift, n) ++ padding).as[Vec[M]]
+          else (padding ++ toShift.range(0, n - bitsToShift)).as[Vec[M]]
 
         val test =
           when (amount.at(index).as[Bit]) {
@@ -193,58 +213,52 @@ object lang {
         recur(index + 1, test)
       }
 
-    recur(0, vec.as[Type])
+    recur(0, vec)
   }
 
 
   /** logical shift left */
-  def (vec: Signal[_]) << (amount: Signal[_]): Signal[_] =
+  def [M <: Num, N <: Num](vec: Signal[Vec[M]]) << (amount: Signal[Vec[N]]): Signal[Vec[M]] =
     shiftImpl(vec, amount, isLeft = true)
 
   /** logical shift  right */
-  def (vec: Signal[_]) >> (amount: Signal[_]): Signal[_] =
+  def [M <: Num, N <: Num](vec: Signal[Vec[M]]) >> (amount: Signal[Vec[N]]): Signal[Vec[M]] =
     shiftImpl(vec, amount, isLeft = false)
 
   /** unsigned addition, ripple-carry adder */
-  def (vec1: Signal[_]) + (vec2: Signal[_]): Signal[_] = {
-    assert(isVec(vec1.tpe))
-    assert(isVec(vec2.tpe))
-
+  def [N <: Num](vec1: Signal[Vec[N]]) + (vec2: Signal[Vec[N]]): Signal[Vec[N]] = {
     val n: Int = vec1.size
 
     // index starts from least significant bit
-    def recur(index: Int, cin: Signal[Bit], acc: Signal[_]): (Signal[Bit], Signal[_]) =
-      if (index >= n) (cin, acc)
+    def recur(index: Int, cin: Signal[Bit], acc: Signal[Vec[_]]): (Signal[Bit], Signal[Vec[N]]) =
+      if (index >= n) (cin, acc.asInstanceOf)
       else {
         val a: Signal[Bit] = vec1.at(index).as[Bit]
         val b: Signal[Bit] = vec2.at(index).as[Bit]
         val s: Signal[Bit] = a ^ b ^ cin
         val cout: Signal[Bit] = (a & b ) | (cin & (a ^ b))
-        recur(index + 1, cout, if (acc == null) s else s ~ acc)
+        recur(index + 1, cout, (s :: acc.as[Vec[N]]).asInstanceOf)
       }
 
-    recur(0, lit(false), null)._2
+    recur(0, lit(false), vec().as[Vec[_]])._2
   }
 
   /** unsigned subtraction */
-  def (vec1: Signal[_]) - (vec2: Signal[_]): Signal[_] = {
-    assert(isVec(vec1.tpe))
-    assert(isVec(vec2.tpe))
-
+  def [N <: Num](vec1: Signal[Vec[N]]) - (vec2: Signal[Vec[N]]): Signal[Vec[N]] = {
     val n: Int = vec1.size
 
     // index starts from least significant bit
-    def recur(index: Int, bin: Signal[Bit], acc: Signal[_]): (Signal[Bit], Signal[_]) =
-      if (index >= n) (bin, acc)
+    def recur(index: Int, bin: Signal[Bit], acc: Signal[Vec[_]]): (Signal[Bit], Signal[Vec[N]]) =
+      if (index >= n) (bin, acc.asInstanceOf)
       else {
         val a: Signal[Bit] = vec1.at(index).as[Bit]
         val b: Signal[Bit] = vec2.at(index).as[Bit]
         val d: Signal[Bit] = a ^ b ^ bin
         val bout: Signal[Bit] = (!a & b) | (!a & bin) | (b & bin)
-        recur(index + 1, bout, if (acc == null) d else d ~ acc)
+        recur(index + 1, bout, (d :: acc.as[Vec[N]]).asInstanceOf)
       }
 
-    recur(0, lit(false), null)._2
+    recur(0, lit(false), vec().as[Vec[_]])._2
   }
 
   /** Int -> Bits */
@@ -252,57 +266,23 @@ object lang {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n > 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
 
-    var res: Value[_] = null
-    var shift = 1 << N
-    while (shift > 0) {
-      val b = (n & (1 << shift)) == 0
-      res = if (res == null) BitV(b) else new PairV(res, BitV(b))
-      shift = shift >> 1
-    }
-
-    res.asInstanceOf
+    VecV(i => (n & (1 << i)) != 0, N)
   }
 
   /** Int -> Bits */
   def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] =
     n.toValue(N).toSignal[Vec[N.type]]
 
+  def [N <: Num, U <: Num](sig: Signal[Bit]) :: (vec: Signal[Vec[N]]): Signal[Vec[U]] = Cons[N, U](sig, vec)
+
   /** Concat two bit vectors */
-  def (sig1: Signal[_]) ++ (sig2: Signal[_]): Signal[_] = {
-    assert(isVec(sig1.tpe))
-    assert(isVec(sig2.tpe))
+  def [M <: Num, N <: Num, U <: Num](sig1: Signal[Vec[M]]) ++ (sig2: Signal[Vec[N]]): Signal[Vec[U]] =
+    if (sig1.size == 0) sig2.asInstanceOf
+    else sig1.at(0) :: (sig1.range(1, sig1.size - 1) ++ sig2)
 
-    sig1.tpe match {
-      case Bit      => sig1 ~ sig2
-      case Bit ~ t2 => sig1.as[Bit ~ Bit].left ~ (sig1.as[Bit ~ Bit].right ++ sig2)
-    }
-  }
+  def [S <: Num](vec: Signal[Vec[S]]) at(index: Int): Signal[Bit] = At(vec, index)
 
-  // ---------------- range operations --------------------
-
-  def [S <: Type](sig: Signal[S]) at(index: Int): Signal[_] = {
-    assert(index >= 0)
-    if (index == 0) sig.asInstanceOf
-    else sig.tpe match {
-      case Bit     => throw new Exception("index out of range")
-      case s1 ~ s2 => sig.as[Type ~ Type].right.at(index - 1)
-    }
-  }
-
-  def [S <: Type](sig: Signal[S]) range(from: Int, to: Int): Signal[_] = {
-    assert(from >= 0 && to >=0 && from < to)
-    def recur[T <: Type](sig: Signal[T], acc: Signal[_], curIndex: Int): Signal[_] = {
-      if (curIndex == to) acc
-      else sig.tpe match {
-        case b: Bit  => throw new Exception("index out of range")
-        case s1 ~ s2 =>
-          val sig2 = sig.as[Type ~ Type]
-          if (curIndex < from) recur(sig2.right, acc, curIndex + 1)
-          else recur(sig2.right, if (acc == null) sig2.left else acc ~ sig2.left, curIndex + 1)
-      }
-    }
-    recur(sig, null, 0)
-  }
+  def [S <: Num, U <: Num](vec: Signal[Vec[S]]) range(from: Int, to: Int): Signal[Vec[U]] = Range[S, U](vec, from, to)
 
   // ----------------  utilities --------------------
 
@@ -318,11 +298,17 @@ object lang {
     case s1 ~ s2 =>
       type T1 <: Type
       type T2 <: Type
-      val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
-      val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
+      val x1 = x.as[T1 ~ T2]
+      val y1 = y.as[T1 ~ T2]
       (test(cond, x1.left, y1.left) ~ test(cond, x1.right, y1.right)).asInstanceOf
+
+    case Vec(n) =>
+      (0 until n).foldLeft(vec()) { (acc, i) =>
+        test1(cond, x.as[Vec[n.type]].at(i), y.as[Vec[n.type]].at(i)) :: acc
+      }.asInstanceOf
+
     case _ =>
-      test1(cond, x.asInstanceOf[Signal[Bit]], y.asInstanceOf[Signal[Bit]]).asInstanceOf
+      test1(cond, x.as[Bit], y.as[Bit]).asInstanceOf
   }
 
   /** When syntax
@@ -351,6 +337,13 @@ object lang {
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
       val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
       (x1.left === y1.left) & (x1.right === y1.right)
+
+    case Vec(n) =>
+      (0 until n).map { i =>
+        equalBit(x.as[Vec[n.type]].at(i), y.as[Vec[n.type]].at(i))
+      }.reduce(_ & _)
+
+
     case _ =>
       equalBit(x.asInstanceOf[Signal[Bit]], y.asInstanceOf[Signal[Bit]])
   }

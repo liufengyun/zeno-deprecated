@@ -37,14 +37,14 @@ object Controller {
 
   type BusOut =
     Vec[8] ~ // addr
-    Vec[1] ~ // read
-    Vec[1] ~ // write
+    Bit ~    // read
+    Bit ~    // write
     Vec[32]  // write data
 
   type BusIn =
     Vec[32] // read data
 
-  type ACC = Vec[32]
+  type ACC   = Vec[32]
   type INSTR = Vec[16]
 
   def instrMemory(addrWidth: Int, prog: Array[Int], addr: Signal[Vec[addrWidth.type]]): Signal[Vec[16]] = {
@@ -58,7 +58,7 @@ object Controller {
     }
   }
 
-  def stage2(instr: Signal[Vec[INSTR]], acc: Signal[ACC], busIn: Signal[BusIn]): Signal[ACC] = {
+  def stage2(instr: Signal[INSTR], acc: Signal[ACC], busIn: Signal[BusIn]): Signal[ACC] = {
     val opcode  = instr.range(0, 7).as[Vec[8]]
 
     when (opcode === ADD.toSignal(8)) {
@@ -92,11 +92,13 @@ object Controller {
 
     val defaultBusOut: Signal[BusOut] = 0.toSignal(8) ~ 0 ~ 0 ~ 0.toSignal(32)
 
-    fsm("processor", pcInit ~ accInit ~ lastInit) { (s: Signal[PC ~ ACC ~ INSTR]) =>
-      let("pcNext", (s.left + 1.toSignal(addrWidth)).as[PC]) { pcNext =>
-        val acc = s.right
+    fsm("processor", pcInit ~ accInit ~ lastInit) { (state: Signal[PC ~ ACC ~ INSTR]) =>
+      val pc = state.left.left
+      val acc = state.left.right
+      val lastInstr = state.right
+      let("pcNext", (pc + 1.toSignal(addrWidth)).as[PC]) { pcNext =>
 
-        let("instr", instrMemory(addrWidth, prog, s.left)) { instr =>
+        let("instr", instrMemory(addrWidth, prog, pc)) { instr =>
           val operand = (0.toSignal(24) ++ instr.range(8, 15)).as[Vec[32]]
           val opcode  = instr.range(0, 7).as[Vec[8]]
 
@@ -107,12 +109,12 @@ object Controller {
           val loadBusOut: Signal[BusOut] = busAddr ~ 1 ~ 0 ~ 0.toSignal(32)
 
           // forward acc from stage 2
-          let("stage2Acc", stage2(s.right.right, acc, busIn)) { acc =>
+          let("stage2Acc", stage2(lastInstr, acc, busIn)) { acc =>
 
             def next(
               pc: Signal[PC] = pcNext,
               acc: Signal[ACC] = acc,
-              instr: Signal[INSTR] = 0.toSignal(32),
+              instr: Signal[INSTR] = 0.toSignal(16),
               out: Signal[BusOut] = defaultBusOut
             ): Signal[(PC ~ ACC ~ INSTR) ~ BusOut] = (pc ~ acc ~ instr) ~ out
 
