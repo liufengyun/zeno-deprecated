@@ -215,8 +215,8 @@ object lang {
         val bitsToShift = 1 << index
         val padding = 0.toSignal(bitsToShift)
         val shifted: Signal[Vec[M]] =
-          if (isLeft) (toShift.range(bitsToShift, n) ++ padding).as[Vec[M]]
-          else (padding ++ toShift.range(0, n - bitsToShift)).as[Vec[M]]
+          if (isLeft) (toShift(bitsToShift, n) ++ padding).as[Vec[M]]
+          else (padding ++ toShift(0, n - bitsToShift)).as[Vec[M]]
 
         val test =
           when (amount(index).as[Bit]) {
@@ -297,11 +297,11 @@ object lang {
   /** Concat two bit vectors */
   def [M <: Num, N <: Num, U <: Num](sig1: Signal[Vec[M]]) ++ (sig2: Signal[Vec[N]]): Signal[Vec[U]] =
     if (sig1.size == 0) sig2.asInstanceOf
-    else sig1(0) :: (sig1.range(1, sig1.size - 1) ++ sig2)
+    else sig1(0) :: (sig1(1, sig1.size - 1) ++ sig2)
 
   def [S <: Num](vec: Signal[Vec[S]]) apply(index: Int): Signal[Bit] = At(vec, index)
 
-  def [S <: Num, U <: Num](vec: Signal[Vec[S]]) range(from: Int, to: Int): Signal[Vec[U]] = Range[S, U](vec, from, to)
+  def [S <: Num, U <: Num](vec: Signal[Vec[S]]) apply(from: Int, to: Int): Signal[Vec[U]] = Range[S, U](vec, from, to)
 
   // ----------------  utilities --------------------
 

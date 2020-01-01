@@ -59,7 +59,7 @@ object Controller {
   }
 
   def stage2(instr: Signal[INSTR], acc: Signal[ACC], busIn: Signal[BusIn]): Signal[ACC] = {
-    val opcode  = instr.range(0, 7).as[Vec[8]]
+    val opcode  = instr(0, 7).as[Vec[8]]
 
     when (opcode === ADD.toSignal(8)) {
       (acc + busIn).as[ACC]
@@ -98,12 +98,12 @@ object Controller {
       let("pcNext", (pc + 1.toSignal(addrWidth)).as[PC]) { pcNext =>
 
         let("instr", instrMemory(addrWidth, prog, pc)) { instr =>
-          val operand = (0.toSignal(24) ++ instr.range(8, 15)).as[Vec[32]]
-          val opcode  = instr.range(0, 7).as[Vec[8]]
+          val operand = (0.toSignal(24) ++ instr(8, 15)).as[Vec[32]]
+          val opcode  = instr(0, 7).as[Vec[8]]
 
-          val instrAddr = instr.range(15 - addrWidth - 1, 15).as[PC]
-          val busAddr = instr.range(8, 15).as[Vec[8]]
-          val shiftOperand = instr.range(12, 15).as[Vec[4]]
+          val instrAddr = instr(15 - addrWidth - 1, 15).as[PC]
+          val busAddr = instr(8, 15).as[Vec[8]]
+          val shiftOperand = instr(12, 15).as[Vec[4]]
 
           val loadBusOut: Signal[BusOut] = busAddr ~ 1 ~ 0 ~ 0.toSignal(32)
 
