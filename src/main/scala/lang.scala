@@ -34,8 +34,8 @@ object lang {
 
   sealed trait Signal[T <: Type] {
     def unary_! : Signal[T] = Not(this)
-    def && (rhs: Signal[T]): Signal[T] = And(this, rhs)
-    def || (rhs: Signal[T]): Signal[T] = Or(this, rhs)
+    def & (rhs: Signal[T]): Signal[T] = And(this, rhs)
+    def | (rhs: Signal[T]): Signal[T] = Or(this, rhs)
     def ^ (rhs: Signal[T]): Signal[T] = Or(And(this, !rhs), And(!this, rhs))
     def ~[U <: Type](rhs: Signal[U]): Signal[T ~ U] = Pair(this, rhs)
 
@@ -206,7 +206,7 @@ object lang {
     shiftImpl(vec, amount, isLeft = false)
 
   /** unsigned addition, ripple-carry adder */
-  def (vec1: Signal[_]) + (vec2: Signal[_]): (Signal[Bit], Signal[_]) = {
+  def (vec1: Signal[_]) + (vec2: Signal[_]): Signal[_] = {
     assert(isVec(vec1.tpe))
     assert(isVec(vec2.tpe))
 
@@ -219,15 +219,15 @@ object lang {
         val a: Signal[Bit] = vec1.at(index).as[Bit]
         val b: Signal[Bit] = vec2.at(index).as[Bit]
         val s: Signal[Bit] = a ^ b ^ cin
-        val cout: Signal[Bit] = (a && b ) || (cin && (a ^ b))
+        val cout: Signal[Bit] = (a & b ) | (cin & (a ^ b))
         recur(index + 1, cout, if (acc == null) s else s ~ acc)
       }
 
-    recur(0, lit(false), null)
+    recur(0, lit(false), null)._2
   }
 
   /** unsigned subtraction */
-  def (vec1: Signal[_]) - (vec2: Signal[_]): (Signal[Bit], Signal[_]) = {
+  def (vec1: Signal[_]) - (vec2: Signal[_]): Signal[_] = {
     assert(isVec(vec1.tpe))
     assert(isVec(vec2.tpe))
 
@@ -240,11 +240,11 @@ object lang {
         val a: Signal[Bit] = vec1.at(index).as[Bit]
         val b: Signal[Bit] = vec2.at(index).as[Bit]
         val d: Signal[Bit] = a ^ b ^ bin
-        val bout: Signal[Bit] = (!a && b) || (!a && bin) || (b && bin)
+        val bout: Signal[Bit] = (!a & b) | (!a & bin) | (b & bin)
         recur(index + 1, bout, if (acc == null) d else d ~ acc)
       }
 
-    recur(0, lit(false), null)
+    recur(0, lit(false), null)._2
   }
 
   /** Int -> Bits */
@@ -313,7 +313,7 @@ object lang {
   implicit def tuple3toPair[T1 <: Type, T2 <: Type, T3 <: Type]: Conversion[(Signal[T1], Signal[T2], Signal[T3]), Signal[T1 ~ T2 ~ T3]] =
     t3 => t3._1 ~ t3._2 ~ t3._3
 
-  def test1(cond: Signal[Bit], x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (!cond || x) && (cond || y)
+  def test1(cond: Signal[Bit], x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (!cond | x) & (cond | y)
   def test[T <: Type](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = x.tpe match {
     case s1 ~ s2 =>
       type T1 <: Type
@@ -343,14 +343,14 @@ object lang {
       WhenCont(r => cont(test(cond2, z, r)))
   }
 
-  def equalBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x && y) || (!x && !y)
+  def equalBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x & y) | (!x & !y)
   def [T <: Type](x: Signal[T]) === (y: Signal[T]): Signal[Bit] =  x.tpe match {
     case s1 ~ s2 =>
       type T1 <: Type
       type T2 <: Type
       val x1 = x.asInstanceOf[Signal[T1 ~ T2]]
       val y1 = y.asInstanceOf[Signal[T1 ~ T2]]
-      (x1.left === y1.left) && (x1.right === y1.right)
+      (x1.left === y1.left) & (x1.right === y1.right)
     case _ =>
       equalBit(x.asInstanceOf[Signal[Bit]], y.asInstanceOf[Signal[Bit]])
   }
