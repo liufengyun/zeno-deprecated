@@ -460,7 +460,9 @@ object lang {
 
     def padding: String = "\n" + ("  " * indent)
 
-    def indented(str: => String): String = {
+    def indented(str: => String): String = indentedWith(tabs = 1)(str)
+
+    def indentedWith(tabs: Int)(str: => String): String = {
       indent += 1
       val res = str
       indent -= 1
@@ -481,7 +483,7 @@ object lang {
           recur(vec) + "(" + from + ", " + to + ")"
 
         case VecLit(bits)   =>
-          bits.map(_.toString).mkString("")
+          toHex(bits)
 
         case Cons(bit, vec) =>
           recur(bit) + " :: " + recur(vec)
@@ -505,7 +507,7 @@ object lang {
         case Fsm(sym, init, body) =>
           indented {
             padding + "fsm { " + show(init) + " | " + sym.name + " => " +
-            padding + indented(show(body)) +
+            indentedWith(tabs = 2) { padding + recur(body) } +
             padding + "}"
           }
 
@@ -551,6 +553,34 @@ object lang {
     case BitV(value)     => value.toString
     case PairV(l, r)     => show(l) + " ~ " + show(r)
     case VecV(map, size) =>
-      (0 until size).map(i => map(i).toString).reverse.mkString("")
+      toHex((0 until size).map[0 | 1](i => map(i)).toList)
+  }
+
+  def toHex(bits: List[0 | 1]): String = {
+    var base: Int = 1
+    var sum: Int = 0
+    val sb = new StringBuilder
+    bits.foldRight(sb) { (bit, sbt) =>
+      sum += bit * base
+      base *= 2
+
+      if (base > 8) {
+        base = 1
+
+        if(sum < 10) sb.append(sum.toString)
+        else if(sum == 10) sb.append("A")
+        else if(sum == 11) sb.append("B")
+        else if(sum == 12) sb.append("C")
+        else if(sum == 13) sb.append("D")
+        else if(sum == 14) sb.append("E")
+        else if(sum == 15) sb.append("F")
+
+        sum = 0
+      }
+
+      sb
+    }
+
+    sb.toString
   }
 }
