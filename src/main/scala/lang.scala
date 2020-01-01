@@ -559,12 +559,14 @@ object lang {
   def toHex(bits: List[0 | 1]): String = {
     var base: Int = 1
     var sum: Int = 0
+    var count: Int = 0
     val sb = new StringBuilder
     bits.foldRight(sb) { (bit, sbt) =>
+      count += 1
       sum += bit * base
       base *= 2
 
-      if (base > 8) {
+      if (base > 8 || count == bits.size) {
         base = 1
 
         if(sum < 10) sb.append(sum.toString)
