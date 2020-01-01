@@ -369,11 +369,79 @@ object lang {
 
   // ---------------- pretty print --------------------
 
+  def show[T <: Type](sig: Signal[T]): String = {
+    var indent = 0
 
-  // TODO
-  // 1. adder
-  // 2. multiplier
-  // 3. average filter
-  // 4. 2nd order filter : synchronous paper
-  // 5. Lucid synchronous
+    def padding: String = "\n" + (" " * indent)
+
+    def indented(str: => String): String = {
+      indent += 1
+      val res = str
+      indent -= 1
+      res
+    }
+
+    def recur[T <: Type](sig: Signal[T]): String =
+      sig match {
+        case Par(lhs, rhs) => recur(lhs) + "~" + recur(rhs)
+
+        case Left(pair)    => recur(pair) + ".1"
+
+        case Right(pair)   => recur(pair) + ".2"
+
+        case At(vec, i)    => recur(vec) + "(" + i + ")"
+
+        case Range(vec, from, to) =>
+          recur(vec) + "(" + from + "," + to + ")"
+
+        case VecLit(bits)   =>
+          bits.map(_.toString).mkString("")
+
+        case Cons(bit, vec) =>
+          recur(bit) + " :: " + recur(vec)
+
+        case BitLit(value)     =>
+          value.toString
+
+        case Var(sym, tpe)  =>
+          sym.name
+
+        case Let(sym, sig, body) =>
+          indented {
+            padding + "let " + sym.name + ": " + show(sig.tpe)  +  " = " + recur(sig) + " in" +
+            padding + recur(body)
+          }
+
+        case Fsm(sym, init, body) =>
+          indented {
+            padding + "fsm { " + show(init.asInstanceOf[Type]) + " | " + sym.name + " => " +
+            padding + indented(show(body)) +
+            padding + "}"
+          }
+
+        case And(lhs, rhs)  =>
+          recur(lhs) + " & " + recur(rhs)
+
+        case Or(lhs, rhs)   =>
+          recur(lhs) + " | " + recur(rhs)
+
+        case Not(in)        =>
+          "!" + recur(in)
+      }
+
+    recur(sig)
+  }
+
+  def show(tpe: Type): String = tpe match {
+    case Bit          => "Bit"
+    case Pair(t1, t2) => show(t1) + " ~ " + show(t2)
+    case Vec(size)    => "Vec[" + size + "]"
+  }
+
+  def show[T <: Type](value: Value[Type]): String = value match {
+    case BitV(value)     => value.toString
+    case PairV(l, r)     => show(l.asInstanceOf[T]) + " ~ " + show(r.asInstanceOf[T])
+    case VecV(map, size) =>
+      (0 until size).map(i => map(i).toString).reverse.mkString("")
+  }
 }
