@@ -51,7 +51,8 @@ object Controller {
     val default: Signal[Vec[16]] = 0.toSignal(16)
     (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
       when[Vec[16]] (addr === curAddr.toSignal(addrWidth)) {
-        prog(curAddr).toSignal(16)
+        if (curAddr < prog.size) prog(curAddr).toSignal(16)
+        else acc
       } otherwise {
         acc
       }
@@ -101,7 +102,7 @@ object Controller {
           val operand = (0.toSignal(24) ++ instr(8, 15)).as[Vec[32]]
           val opcode  = instr(0, 7).as[Vec[8]]
 
-          val instrAddr = instr(15 - addrWidth - 1, 15).as[PC]
+          val jmpAddr = instr(15 - addrWidth + 1, 15).as[PC]
           val busAddr = instr(8, 15).as[Vec[8]]
           val shiftOperand = instr(12, 15).as[Vec[4]]
 
@@ -153,11 +154,11 @@ object Controller {
               next(acc = acc2)
 
             } .when (opcode === BR.toSignal(8)) {
-              next(pc = instrAddr)
+              next(pc = jmpAddr)
 
             } .when (opcode === BRZ.toSignal(8)) {
               when(acc === 0.toSignal(32)) {
-                next(pc = instrAddr)
+                next(pc = jmpAddr)
               }
               .otherwise {
                 next()
@@ -168,7 +169,7 @@ object Controller {
                 next()
               }
               .otherwise {
-                next(pc = instrAddr)
+                next(pc = jmpAddr)
               }
 
             } .when (opcode === ADD.toSignal(8)) {
@@ -213,7 +214,7 @@ object Assembler {
   import ISA._
 
   def assemble(progPath: String): Array[Int] = {
-    println("parsing file " + progPath)
+    // println("parsing file " + progPath)
 
     val source = Source.fromFile(progPath)
 
@@ -231,7 +232,7 @@ object Assembler {
       case (acc, _)        => addr += 1; acc
     }
 
-    println("labels: " + symbols)
+    // println("labels: " + symbols)
 
     def toInt(s: String): Int = {
       // TODO: check valid range of the argument
@@ -246,7 +247,7 @@ object Assembler {
       s.toInt
     }
 
-    println("lines size = " + lines.size)
+    // println("lines size = " + lines.size)
 
     val instructions = for (line <- lines if !line.matches("(.*:)")) yield {
       val tokens = line.split("\\s+")
@@ -274,7 +275,7 @@ object Assembler {
       }
     }
 
-    println("instr size: " + instructions.size)
+    // println("instr size: " + instructions.size)
 
     instructions.toArray
   }
