@@ -23,4 +23,21 @@ object examples {
     val cs1 = fullAdder(a(1), b(1), cs0(1))
     Vec(cs1(1), cs1(0), cs0(0))
   }
+
+  def adderN[N <: Num](vec1: Signal[Vec[N]], vec2: Signal[Vec[N]]): Signal[Bit ~ Vec[N]] = {
+    val n: Int = vec1.size
+
+    // index starts from least significant bit
+    def recur(index: Int, cin: Signal[Bit], acc: Signal[Vec[_]]): (Signal[Bit], Signal[Vec[N]]) =
+      if (index >= n) (cin, acc.as[Vec[N]])
+      else {
+        val a: Signal[Bit] = vec1(index).as[Bit]
+        val b: Signal[Bit] = vec2(index).as[Bit]
+        val s: Signal[Bit] = a ^ b ^ cin
+        val cout: Signal[Bit] = (a & b ) | (cin & (a ^ b))
+        recur(index + 1, cout, (s :: acc.as[Vec[N]]).asInstanceOf)
+      }
+
+    recur(0, lit(false), Vec().as[Vec[_]])
+  }
 }

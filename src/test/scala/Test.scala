@@ -9,6 +9,7 @@ import java.io.File
 
 import lang._
 
+import scala.language.implicitConversions
 class TestSuite {
   @Test def controller(): Unit = {
     var  success: Boolean = true
@@ -35,24 +36,47 @@ class TestSuite {
     assertTrue(success)
   }
 
-  @Test def adder(): Unit = {
+  @Test def adder2(): Unit = {
     val a = variable[Vec[2]]("a")
     val b = variable[Vec[2]]("b")
     val circuit = examples.adder2(a, b)
     val add2 = phases.interpret(List(a, b), circuit)
 
-    add2(Value(1, 0) :: Value(0, 1) :: Nil) match {
-      case Value(c1, s1, s0) =>
-        assertEquals(c1, 0)
-        assertEquals(s1, 1)
-        assertEquals(s0, 1)
+    {
+      val Value(c1, s1, s0) = add2(Value(1, 0) :: Value(0, 1) :: Nil)
+      assertEquals(c1, 0)
+      assertEquals(s1, 1)
+      assertEquals(s0, 1)
     }
 
-    add2(Value(1, 0) :: Value(1, 1) :: Nil) match {
-      case Value(c1, s1, s0) =>
-        assertEquals(c1, 1)
-        assertEquals(s1, 0)
-        assertEquals(s0, 1)
+    {
+      val Value(c1, s1, s0) = add2(Value(1, 0) :: Value(1, 1) :: Nil)
+      assertEquals(c1, 1)
+      assertEquals(s1, 0)
+      assertEquals(s0, 1)
+    }
+  }
+
+  @Test def adderN(): Unit = {
+    val a = variable[Vec[3]]("a")
+    val b = variable[Vec[3]]("b")
+    val circuit = examples.adderN(a, b)
+    val add3 = phases.interpret(List(a, b), circuit)
+
+    {
+      val BitV(c2) ~ Value(s2, s1, s0) = add3(Value(1, 0, 1) :: Value(0, 1, 0) :: Nil)
+      assertEquals(c2, 0)
+      assertEquals(s2, 1)
+      assertEquals(s1, 1)
+      assertEquals(s0, 1)
+    }
+
+    {
+      val BitV(c2) ~ Value(s2, s1, s0) = add3(Value(1, 0, 1) :: Value(1, 1, 1) :: Nil)
+      assertEquals(c2, 1)
+      assertEquals(s2, 1)
+      assertEquals(s1, 0)
+      assertEquals(s0, 0)
     }
   }
 }
