@@ -62,7 +62,7 @@ object Controller {
   }
 
   def stage2(instr: Signal[INSTR], acc: Signal[ACC], busIn: Signal[BusIn]): Signal[ACC] = {
-    val opcode  = instr(0, 7).as[Vec[8]]
+    val opcode  = instr(15, 8).as[Vec[8]]
 
     when (opcode === ADD.toSignal(8)) {
       (acc + busIn).as[ACC]
@@ -101,12 +101,12 @@ object Controller {
       let("pcNext", (pc + 1.toSignal(addrWidth)).as[PC]) { pcNext =>
 
         let("instr", instrMemory(addrWidth, prog, pc)) { instr =>
-          val operand = (0.toSignal(24) ++ instr(8, 15)).as[Vec[32]]
-          val opcode  = instr(0, 7).as[Vec[8]]
+          val operand = (0.toSignal(24) ++ instr(7, 0)).as[Vec[32]]
+          val opcode  = instr(15, 8).as[Vec[8]]
 
-          val jmpAddr = instr(15 - addrWidth + 1, 15).as[PC]
-          val busAddr = instr(8, 15).as[Vec[8]]
-          val shiftOperand = instr(12, 15).as[Vec[4]]
+          val jmpAddr = instr(addrWidth, 0).as[PC]
+          val busAddr = instr(7, 0).as[Vec[8]]
+          val shiftOperand = instr(3, 0).as[Vec[4]]
 
           val loadBusOut: Signal[BusOut] = busAddr ~ 1 ~ 0 ~ 0.toSignal(32)
 
@@ -217,7 +217,7 @@ object Controller {
     val busIn = variable[BusIn]("busIn")
     val instructions = Assembler.assemble(prog)
     val code = processor(instructions, busIn)
-    println(show(code))
+    // println(show(code))
     val fsm = interpret(busIn, code)
 
     var run = true
@@ -230,7 +230,7 @@ object Controller {
     while(run) {
       val (addr ~ read ~ write ~ writedata) ~ (acc ~ pc ~ instr ~ exit) = fsm(input)
 
-      if (read.toInt == 1) {
+      if (write.toInt == 1) {
         val data = writedata.toInt
         if (addr.toShort == 0) {
           val char = data.toChar
@@ -241,15 +241,15 @@ object Controller {
         }
       }
 
-      if (write.toInt == 1) {
+      if (read.toInt == 1) {
         val data = memory.getOrElse(addr.toShort, 0)
         input = data.toValue(32)
       }
 
-      println("pc = " + pc.asInstanceOf[Value[Vec[0]]].toInt)
-      println("acc = " + acc.toInt)
+      // println("pc = " + pc.asInstanceOf[Value[Vec[0]]].toInt)
+      // println("acc = " + acc.toInt)
 
-      displayPrompt()
+      // displayPrompt()
 
       maxInstructions -= 1
       run = exit.toInt == 0 && maxInstructions > 0

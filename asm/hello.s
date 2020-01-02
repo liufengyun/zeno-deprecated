@@ -1,10 +1,6 @@
-//
-// A small hello world
-//
-// write Leros to the UART
-//
+//  hello world
 
-	nop	// first instruction is not executed
+nop
 
 loadi 104
 store 0

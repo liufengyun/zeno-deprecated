@@ -28,10 +28,10 @@ object phases {
         if (vec2.eq(vec)) tree
         else At(vec2, index)
 
-      case Range(vec, from, to)   =>
+      case Range(vec, to, from)   =>
         val vec2 = this(vec)
         if (vec2.eq(vec)) tree
-        else Range(vec2, from, to).as[T]
+        else Range(vec2, to, from).as[T]
 
       case VecLit(bits)           =>
         tree
@@ -162,8 +162,8 @@ object phases {
         case At(Fsm(sym, init, body), index) =>
           Fsm(sym, init, let("x", body) { x => x.left ~ (x.right(index)) } )
 
-        case Range(Fsm(sym, init, body), from, to) =>
-          Fsm(sym, init, let("x", body) { x => x.left ~ (x.right(from, to)).as[T] } )
+        case Range(Fsm(sym, init, body), to, from) =>
+          Fsm(sym, init, let("x", body) { x => x.left ~ (x.right(to, from)).as[T] } )
 
         case Equals(lhs, Fsm(sym, init, body)) =>
           Fsm(sym, init, let("x", body) { x => x.left ~ (lhs.as[Vec[0]] === x.right.as[Vec[0]]).as[T] } )
@@ -356,9 +356,9 @@ object phases {
           case vec: VecV[_] => BitV(vec(index))
         }
 
-      case Range(vec, from, to)   =>
+      case Range(vec, to, from)   =>
         recur(vec) match {
-          case VecV(bits) => VecV(bits.dropRight(bits.size - to - 1).drop(from - 1)).asInstanceOf[Value[T]]
+          case vec: VecV[_] =>  vec(to, from).asInstanceOf[Value[T]]
         }
 
       case VecLit(bits)           =>
@@ -425,9 +425,11 @@ object phases {
         var lastState = init
         (v: Value[S]) => {
           val env = Map(input.sym -> v, sym -> lastState)
+          // println(env)
           recur(body)(env) match {
             case PairV(lhs, rhs) =>
               lastState = lhs
+              // println("out = " + rhs)
               rhs
           }
         }

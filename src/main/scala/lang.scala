@@ -34,12 +34,14 @@ object lang {
     // bits are stored in reverse order
     def apply(i: Int): 0 | 1 = bits(size - i - 1)
     def size: Int = bits.size
+    def apply[U <: Num](to: Int, from: Int): VecV[U] =
+      VecV[U](bits.dropRight(from).drop(bits.size - to - 1))
   }
 
   def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toInt: Int = value match {
     case BitV(value) => value
-    case VecV(bits) =>
-      bits.foldLeft(0) { (acc, i) => acc | ((i & 1) << i) }
+    case vec: VecV[_] =>
+      (0 until vec.size).foldLeft(0) { (acc, i) => acc | ((vec(i) & 1) << i) }
   }
 
   def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toShort: Short = value.toInt.toShort
@@ -106,8 +108,8 @@ object lang {
     val tpe: Type = Bit
   }
 
-  case class Range[T <: Num, S <: Num](vec: Signal[Vec[T]], from: Int, to: Int) extends Signal[Vec[S]] {
-    private def debug: String = "from = " + from + ", to = " + to + ", vec.size = " + vec.size
+  case class Range[T <: Num, S <: Num](vec: Signal[Vec[T]], to: Int, from: Int) extends Signal[Vec[S]] {
+    private def debug: String = s"$to..$from, vec.size = ${vec.size}"
     assert(from < vec.size && from >= 0, debug)
     assert(to < vec.size && from >= 0, debug)
     assert(from <= to, debug)
@@ -319,7 +321,7 @@ object lang {
 
   def [S <: Num](vec: Signal[Vec[S]]) apply(index: Int): Signal[Bit] = At(vec, index)
 
-  def [S <: Num, U <: Num](vec: Signal[Vec[S]]) apply(from: Int, to: Int): Signal[Vec[U]] = Range[S, U](vec, from, to)
+  def [S <: Num, U <: Num](vec: Signal[Vec[S]]) apply(to: Int, from: Int): Signal[Vec[U]] = Range[S, U](vec, to, from)
 
   def [T <: Num](x: Signal[Vec[T]]) === (y: Signal[Vec[T]]): Signal[Bit] = Equals(x, y)
 
@@ -398,13 +400,12 @@ object lang {
 
   /** Concat two bit vectors */
   def concat[M <: Num, N <: Num, U <: Num](sig1: Signal[Vec[M]], sig2: Signal[Vec[N]]): Signal[Vec[U]] = {
-    def recur(from: Int, to: Int): Signal[Vec[N]] =
-      if (from == to) sig1(from) :: sig2
-      else sig1(to) :: recur(from, to - 1)
+    def recur(index: Int): Signal[Vec[N]] =
+      if (index == 0) sig1(0) :: sig2
+      else sig1(index) :: recur(index - 1)
 
     if (sig1.size == 0) sig2.as[Vec[U]]
-    else if (sig1.size == 1) sig1(0) :: sig2
-    else sig1(sig1.size - 1) :: (recur(0, sig1.size - 2))
+    else recur(sig1.size - 1).as[Vec[U]]
   }
 
   def equalsBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x & y) | (!x & !y)
@@ -501,8 +502,8 @@ object lang {
 
         case At(vec, i)    => recur(vec) + "(" + i + ")"
 
-        case Range(vec, from, to) =>
-          recur(vec) + "(" + from + ", " + to + ")"
+        case Range(vec, to, from) =>
+          recur(vec) + "(" + to + ".." + from + ")"
 
         case VecLit(bits)   =>
           toHex(bits)
