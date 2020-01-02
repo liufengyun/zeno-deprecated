@@ -214,7 +214,7 @@ object Controller {
     val instructions = Assembler.assemble(prog)
     val code = processor(instructions, busIn)
     // println(show(code))
-    val fsm = interpret(busIn, code)
+    val fsm = interpret(busIn :: Nil, code)
 
     var run = true
     var maxInstructions = 30000
@@ -224,7 +224,7 @@ object Controller {
 
     var input: Value[BusIn] = 0.toValue(32)
     while(run) {
-      val (addr ~ read ~ write ~ writedata) ~ (acc ~ pc ~ instr ~ exit) = fsm(input)
+      val (addr ~ read ~ write ~ writedata) ~ (acc ~ pc ~ instr ~ exit) = fsm(input :: Nil)
 
       if (write.toInt == 1) {
         val data = writedata.toInt

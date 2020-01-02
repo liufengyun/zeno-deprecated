@@ -239,7 +239,7 @@ object phases {
   def detuple[T <: Type](sig: Signal[T]): Signal[T] = ???
 
 
-  def interpret[T <: Type, S <: Type](input: Var[S], body: Signal[T]): Value[S] => Value[T] = {
+  def interpret[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value[_]] => Value[T] = {
     def and[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = (lhs, rhs) match {
       case (BitV(v1), BitV(v2)) =>
         BitV((v1 & v2).asInstanceOf[0 | 1])
@@ -427,8 +427,8 @@ object phases {
     flatten(lift(body)) match {
       case Fsm(sym, init, body) =>
         var lastState = init
-        (v: Value[S]) => {
-          val env = Map(input.sym -> v, sym -> lastState)
+        (vs: List[Value[_]]) => {
+          val env = input.map(_.sym).zip(vs).toMap + (sym -> lastState)
           // println(env)
           recur(body)(env) match {
             case PairV(lhs, rhs) =>
@@ -439,7 +439,7 @@ object phases {
         }
 
       case code => // combinational
-        (v: Value[S]) => recur(code)(Map(input.sym -> v))
+        (vs: List[Value[_]]) => recur(code)(input.map(_.sym).zip(vs).toMap)
     }
 
   }
