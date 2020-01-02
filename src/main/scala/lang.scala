@@ -104,7 +104,7 @@ object lang {
     }
   }
 
-  /** Empty vector */
+  /** vector literal */
   case class VecLit[T <: Num](bits: List[0 | 1]) extends Signal[Vec[T]] {
     val tpe: Type = {
       val size = bits.size

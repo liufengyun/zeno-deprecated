@@ -1,6 +1,7 @@
 package ysm
 
 import lang._
+import phases._
 
 import scala.language.implicitConversions
 
@@ -205,7 +206,7 @@ object Controller {
     val instructions = Assembler.assemble(file)
     val code = processor(instructions, busIn)
     println(count)
-    println(show(code))
+    println(show(lift(code)))
   }
 }
 
