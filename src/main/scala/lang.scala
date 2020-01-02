@@ -30,14 +30,15 @@ object lang {
 
   case class PairV[S <: Type, T <: Type](lhs: Value[S], rhs: Value[T]) extends Value[S ~ T]
 
-  case class VecV[T <: Num](map: Int => 0 | 1, size: Int) extends Value[Vec[T]] {
-    def apply(i: Int): 0 | 1 = map(i)
+  case class VecV[T <: Num](bits: List[0 | 1]) extends Value[Vec[T]] {
+    def apply(i: Int): 0 | 1 = bits(i)
+    def size: Int = bits.size
   }
 
   def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toInt: Int = value match {
     case BitV(value) => value
-    case VecV(map, size) =>
-      (0 until size).foldLeft(0) { (acc, i) => acc | (map(i) & 1) << i }
+    case VecV(bits) =>
+      bits.foldLeft(0) { (acc, i) => acc | (bits(i) & 1) << i }
   }
 
   def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toShort: Short = value.toInt.toShort
@@ -212,7 +213,9 @@ object lang {
   def typeOf[T <: Type](value: Value[T]): T = value match {
     case _: BitV      => Bit
     case PairV(l, r)  => new ~(typeOf(l), typeOf(r))
-    case VecV(_, s)   => Vec(s).asInstanceOf[T]
+    case VecV(bits)   =>
+      val size = bits.size
+      Vec(size).asInstanceOf[T]
   }
 
   // ---------------- constructors --------------------
@@ -253,8 +256,7 @@ object lang {
   def [T <: Type](value: Value[T]) toSignal: Signal[T] = value match {
     case BitV(b)       => BitLit(b).asInstanceOf
     case PairV(l, r)   => (l.toSignal ~ r.toSignal).asInstanceOf
-    case VecV(map, s)  =>
-      val bits: List[0 | 1] = (0 until s).map[0 | 1](i => map(i)).toList
+    case VecV(bits)  =>
       VecLit(bits).asInstanceOf
   }
 
@@ -274,7 +276,12 @@ object lang {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n >= 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
 
-    VecV(i => if (n & (1 << i)) == 0 then 0 else 1, N)
+    val bits = (0 until N).foldRight(Nil: List[Int]) { (i, acc) =>
+      val bit = if (n & (1 << i)) == 0 then 0 else 1
+      bit :: acc
+    }
+
+    VecV(bits.asInstanceOf[List[0 | 1]]).asInstanceOf[Value[Vec[N.type]]]
   }
 
   /** Int -> Bits, take the least significant N bits */
@@ -566,8 +573,7 @@ object lang {
   def show(value: Value[_]): String = value match {
     case BitV(value)     => value.toString
     case PairV(l, r)     => show(l) + " ~ " + show(r)
-    case VecV(map, size) =>
-      toHex((0 until size).map[0 | 1](i => map(i)).toList)
+    case VecV(bits)      => toHex(bits)
   }
 
   def toHex(bits: List[0 | 1]): String = {

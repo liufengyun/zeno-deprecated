@@ -217,6 +217,7 @@ object Controller {
     val busIn = variable[BusIn]("busIn")
     val instructions = Assembler.assemble(prog)
     val code = processor(instructions, busIn)
+    println(show(code))
     val fsm = interpret(busIn, code)
 
     var run = true
@@ -225,7 +226,7 @@ object Controller {
 
     val memory = scala.collection.mutable.Map.empty[Short, Int]
 
-    var input: Value[BusIn] = VecV(i => 0, busIn.size)
+    var input: Value[BusIn] = 0.toValue(32)
     while(run) {
       val (addrV ~ readV ~ writeV ~ writedataV) ~ (accV ~ pcV ~ instrV ~ exitV) = fsm(input)
 
@@ -249,6 +250,11 @@ object Controller {
         input = data.toValue(32)
       }
 
+      println("pc = " + pcV.asInstanceOf[Value[Vec[0]]].toInt)
+      println("acc = " + accV.toInt)
+
+      displayPrompt()
+
       maxInstructions -= 1
       run = exitV.toInt == 0 && maxInstructions > 0
     }
@@ -264,6 +270,26 @@ object Controller {
     if (check.trim == sb.toString) println(Console.GREEN + msg + Console.RESET)
     else println(Console.RED + msg + Console.RESET)
   }
+
+  /** Show prompt if `-Xprompt` is passed as a flag to the compiler */
+  def displayPrompt(): Unit = {
+    println()
+    print("a)bort, s)tack, r)esume: ")
+    def loop(): Unit = System.in.read() match {
+      case 'a' | 'A' =>
+        new Throwable().printStackTrace()
+        System.exit(1)
+      case 's' | 'S' =>
+        new Throwable().printStackTrace()
+        println()
+      case 'r' | 'R' =>
+        ()
+      case _ =>
+        loop()
+    }
+    loop()
+  }
+
 }
 
 
