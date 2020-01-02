@@ -206,7 +206,7 @@ object Controller {
     val instructions = Assembler.assemble(file)
     val code = processor(instructions, busIn)
     println(count)
-    println(show(lift(code)))
+    println(show(flatten(lift(code))))
   }
 }
 
