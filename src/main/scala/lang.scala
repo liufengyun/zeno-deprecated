@@ -38,6 +38,16 @@ object lang {
       VecV[U](bits.dropRight(from).drop(bits.size - to - 1))
   }
 
+  object Value {
+    def apply(bit: 0 | 1, bits: (0 | 1)*): Value[Vec[_]] =
+      new VecV(bit :: bits.toList).asInstanceOf[Value[Vec[_]]]
+
+    def unapplySeq[T <: Type](value: Value[T]): Option[List[0 | 1]] = value match {
+      case VecV(bits) => Some(bits)
+      case _ => None
+    }
+  }
+
   def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toInt: Int = value match {
     case BitV(value) => value
     case vec: VecV[_] =>

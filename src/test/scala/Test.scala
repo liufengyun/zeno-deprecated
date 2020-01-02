@@ -40,6 +40,19 @@ class TestSuite {
     val b = variable[Vec[2]]("b")
     val circuit = examples.adder2(a, b)
     val add2 = phases.interpret(List(a, b), circuit)
-    val c ~ VecV(bit1, bit2) = add2(VecV(1, 0) :: Nil)
+
+    add2(Value(1, 0) :: Value(0, 1) :: Nil) match {
+      case Value(c1, s1, s0) =>
+        assertEquals(c1, 0)
+        assertEquals(s1, 1)
+        assertEquals(s0, 1)
+    }
+
+    add2(Value(1, 0) :: Value(1, 1) :: Nil) match {
+      case Value(c1, s1, s0) =>
+        assertEquals(c1, 1)
+        assertEquals(s1, 0)
+        assertEquals(s0, 1)
+    }
   }
 }

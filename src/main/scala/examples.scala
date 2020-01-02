@@ -18,9 +18,9 @@ object examples {
     Vec(cout, s(0))
   }
 
-  def adder2(a: Signal[Vec[2]], b: Signal[Vec[2]]): Signal[Bit ~ Vec[2]] = {
+  def adder2(a: Signal[Vec[2]], b: Signal[Vec[2]]): Signal[Vec[3]] = {
     val cs0 = fullAdder(a(0), b(0), 0)
     val cs1 = fullAdder(a(1), b(1), cs0(1))
-    cs1(1) ~ Vec(cs1(0), cs0(0))
+    Vec(cs1(1), cs1(0), cs0(0))
   }
 }
