@@ -30,7 +30,9 @@ object lang {
 
   case class PairV[S <: Type, T <: Type](lhs: Value[S], rhs: Value[T]) extends Value[S ~ T]
 
-  case class VecV[T <: Num](map: Int => 0 | 1, size: Int) extends Value[Vec[T]]
+  case class VecV[T <: Num](map: Int => 0 | 1, size: Int) extends Value[Vec[T]] {
+    def apply(i: Int): 0 | 1 = map(i)
+  }
 
   // ---------------- abstract syntax trees --------------------
 

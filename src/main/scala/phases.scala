@@ -238,7 +238,117 @@ object phases {
 
   def detuple[T <: Type](sig: Signal[T]): Signal[T] = ???
 
-  def interpret[T <: Type](sig: Signal[T])(env: Map[Symbol, Value[_]]): Value[_] = ???
+
+  def interpret[T <: Type, S <: Type](circuit: Circuit[S, T]): Value[S] => Value[T] = {
+    def and[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = ???
+    def or[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = ???
+    def not[T <: Type](in: Value[T]): Value[T] = ???
+    def equals[T <: Type](lhs: Value[T], rhs: Value[T]): Value[Bit] = ???
+    def plus[T <: Num](lhs: Value[Vec[T]], rhs: Value[Vec[T]]): Value[Vec[T]] = ???
+    def minus[T <: Num](lhs: Value[Vec[T]], rhs: Value[Vec[T]]): Value[Vec[T]] = ???
+    def shift[T <: Num, S <: Num](lhs: Value[Vec[T]], rhs: Value[Vec[S]], isLeft: Boolean): Value[Vec[T]] = ???
+
+    def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value[_]]): Value[T] = sig match {
+      case Par(lhs, rhs)          =>
+        recur(lhs) ~ recur(rhs)
+
+      case Left(pair)             =>
+        recur(pair) match {
+          case PairV(lhs, rhs) => lhs
+        }
+
+      case Right(pair)            =>
+        recur(pair) match {
+          case PairV(lhs, rhs) => lhs.asInstanceOf
+        }
+
+      case At(vec, index)         =>
+        recur(vec) match {
+          case VecV(map, size) => BitV(map(index))
+        }
+
+      case Range(vec, from, to)   =>
+        recur(vec) match {
+          case VecV(map, size) => VecV(i => map(i + from), to - from).asInstanceOf
+        }
+
+      case VecLit(bits)           =>
+        VecV(bits, bits.size).asInstanceOf
+
+      case Cons(sig, vec)         =>
+        val bitV = recur(sig).asInstanceOf[BitV]
+        val vecV = recur(vec).asInstanceOf[VecV[_]]
+        VecV(i => if (i == 0) bitV.value else vecV(i - 1), vecV.size + 1).asInstanceOf
+
+      case Var(sym, tpe)          =>
+        env(sym).asInstanceOf
+
+      case Let(sym, sig, body)    =>
+        val v = recur(sig)
+        recur(body)(env.updated(sym, v))
+
+      case Fsm(sym, init, body)   =>
+        ??? // impossible after lifting
+
+      case BitLit(value)          =>
+        BitV(value)
+
+      case And(lhs, rhs)          =>
+        and(recur(lhs), recur(rhs))
+
+      case Or(lhs, rhs)           =>
+        or(recur(lhs), recur(rhs))
+
+      case Not(in)                =>
+        not(recur(in))
+
+      case Concat(lhs, rhs)     =>
+        val lhsV = recur(lhs).asInstanceOf[VecV[_]]
+        val rhsV = recur(rhs).asInstanceOf[VecV[_]]
+        VecV(i => if (i < lhsV.size) lhsV(i) else rhsV(i - lhsV.size), lhsV.size + rhsV.size).asInstanceOf
+
+      case Equals(lhs, rhs)     =>
+        equals(recur(lhs), recur(rhs))
+
+      case Plus(lhs, rhs)       =>
+        val lhsV = recur(lhs)
+        val rhsV = recur(rhs)
+        plus(lhsV, rhsV)
+
+      case Minus(lhs, rhs)      =>
+        val lhsV = recur(lhs)
+        val rhsV = recur(rhs)
+        minus(lhsV, rhsV)
+
+      case Mux(cond, thenp, elsep)  =>
+        val bitV: BitV = recur(cond).asInstanceOf[BitV]
+        if (bitV.value == 1) recur(thenp)
+        else recur(elsep)
+
+      case Shift(lhs, rhs, isLeft)   =>
+        val lhsV = recur(lhs)
+        val rhsV = recur(rhs)
+        shift(lhsV, rhsV, isLeft)
+    }
+
+    flatten(lift(circuit.body)) match {
+      case Fsm(sym, init, body) =>
+        var lastState = init
+        (v: Value[S]) => {
+          val env = Map(circuit.in.sym -> v, sym -> init)
+          recur(body)(env) match {
+            case PairV(lhs, rhs) =>
+              lastState = lhs
+              rhs
+          }
+        }
+
+      case code => // combinational
+        (v: Value[S]) => recur(code)(Map(circuit.in.sym -> v))
+    }
+
+  }
+
 
   def verilog[T <: Type](sig: Signal[T]): String = ???
 
