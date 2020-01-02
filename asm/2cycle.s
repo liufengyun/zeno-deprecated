@@ -5,3 +5,4 @@ store 10
 loadi 2
 add   10
 store 0
+exit

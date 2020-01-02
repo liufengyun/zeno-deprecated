@@ -25,6 +25,7 @@ import scala.language.implicitConversions
    val BR      =    0x10
    val BRZ     =    0x11
    val BRNZ    =    0x12
+   val EXIT    =    0x13
 }
 
 object Controller {
@@ -32,9 +33,9 @@ object Controller {
 
   type Debug =
     Vec[32] ~ // acc
-    Vec[32] ~ // pc
-    Vec[32] ~ // instr
-    Vec[32]   // exit
+    Vec[_] ~ // pc
+    Vec[16] ~ // instr
+    Bit       // exit
 
   type BusOut =
     Vec[8] ~ // addr
@@ -80,7 +81,7 @@ object Controller {
     }
   }
 
-  def processor(prog: Array[Int], busIn: Signal[BusIn]): Signal[BusOut] = {
+  def processor(prog: Array[Int], busIn: Signal[BusIn]): Signal[BusOut ~ Debug] = {
     assert(prog.size > 0)
     var addrW = 1
     while ((1 << addrW) < prog.size) addrW+=1
@@ -115,9 +116,13 @@ object Controller {
             def next(
               pc: Signal[PC] = pcNext,
               acc: Signal[ACC] = acc,
-              instr: Signal[INSTR] = 0.toSignal(16),
-              out: Signal[BusOut] = defaultBusOut
-            ): Signal[(PC ~ ACC ~ INSTR) ~ BusOut] = (pc ~ acc ~ instr) ~ out
+              pendingInstr: Signal[INSTR] = 0.toSignal(16),
+              out: Signal[BusOut] = defaultBusOut,
+              exit: Boolean = false
+            ): Signal[(PC ~ ACC ~ INSTR) ~ (BusOut ~ Debug)] = {
+              val debug = acc ~ (pc.as[Vec[_]]) ~ instr ~ exit
+              (pc ~ acc ~ pendingInstr) ~ (out ~ debug)
+            }
 
             when (opcode === ADDI.toSignal(8)) {
               val acc2 = (acc + operand).as[ACC]
@@ -174,22 +179,25 @@ object Controller {
               }
 
             } .when (opcode === ADD.toSignal(8)) {
-              next(out = loadBusOut, instr = instr)
+              next(out = loadBusOut, pendingInstr = instr)
 
             } .when (opcode === SUB.toSignal(8)) {
-              next(out = loadBusOut, instr = instr)
+              next(out = loadBusOut, pendingInstr = instr)
 
             } .when (opcode === LD.toSignal(8)) {
-              next(out = loadBusOut, instr = instr)
+              next(out = loadBusOut, pendingInstr = instr)
 
             } .when (opcode === AND.toSignal(8)) {
-              next(out = loadBusOut, instr = instr)
+              next(out = loadBusOut, pendingInstr = instr)
 
             } .when (opcode === OR.toSignal(8)) {
-              next(out = loadBusOut, instr = instr)
+              next(out = loadBusOut, pendingInstr = instr)
 
             } .when (opcode === XOR.toSignal(8)) {
-              next(out = loadBusOut, instr = instr)
+              next(out = loadBusOut, pendingInstr = instr)
+
+            } .when (opcode === EXIT.toSignal(8)) {
+              next(exit = true)
 
             } .otherwise { // NOP
               next()
@@ -201,12 +209,60 @@ object Controller {
     }
   }
 
-  def test(file: String): Unit = {
-    val busIn = input[BusIn]("busIn")
-    val instructions = Assembler.assemble(file)
+  def test(prog: String): Unit = {
+    import java.nio.charset.StandardCharsets._
+    import java.nio.file.{Files, Paths, FileSystems, Path}
+    import java.io.File
+
+    val busIn = variable[BusIn]("busIn")
+    val instructions = Assembler.assemble(prog)
     val code = processor(instructions, busIn)
-    println(count)
-    println(show(flatten(lift(code))))
+    val fsm = interpret(busIn, code)
+
+    var run = true
+    var maxInstructions = 30000
+    val sb = new StringBuilder
+
+    val memory = scala.collection.mutable.Map.empty[Short, Int]
+
+    var input: Value[BusIn] = VecV(i => 0, busIn.size)
+    while(run) {
+      val (addrV ~ readV ~ writeV ~ writedataV) ~ (accV ~ pcV ~ instrV ~ exitV) = fsm(input)
+
+      val isRd = readV.toInt == 1
+      val isWr = writeV.toInt == 1
+      val addr = addrV.toShort
+
+      if (isWr) {
+        val data = writedataV.toInt
+        if (addr == 0) {
+          val char = data.toChar
+          sb.append(char)
+        }
+        else {
+          memory(addr) = data
+        }
+      }
+
+      if (isRd) {
+        val data = memory.getOrElse(addr, 0)
+        input = data.toValue(32)
+      }
+
+      maxInstructions -= 1
+      run = exitV.toInt == 0 && maxInstructions > 0
+    }
+
+    val checkFile = prog + ".check"
+    val check =
+      if (new File(checkFile).exists)
+        new String(Files.readAllBytes(Paths.get(checkFile)), UTF_8)
+      else
+        "<empty>"
+    val msg = "expected = " + check + ", found = " + sb.toString
+
+    if (check.trim == sb.toString) println(Console.GREEN + msg + Console.RESET)
+    else println(Console.RED + msg + Console.RESET)
   }
 }
 
@@ -273,6 +329,7 @@ object Assembler {
         case "br"      => (BR     << 8) + symbols(tokens(1))
         case "brz"     => (BRZ    << 8) + symbols(tokens(1))
         case "brnz"    => (BRNZ   << 8) + symbols(tokens(1))
+        case "exit"    => (EXIT   << 8)
         case t: String => throw new Exception("Assembler error: unknown instruction: " + t)
       }
     }

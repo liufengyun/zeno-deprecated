@@ -11,4 +11,4 @@ start:
 
 
 end:
-  nop
+  exit

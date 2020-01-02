@@ -13,7 +13,7 @@ object lang {
 
   // ---------------- Type of signal --------------------
 
-  sealed trait Type
+  sealed abstract class Type
   object Bit extends Type
   case class Pair[S <: Type, T <: Type](lhs: S, rhs: T) extends Type
   case class Vec[T <: Num](size: T) extends Type
@@ -24,7 +24,7 @@ object lang {
 
   // ---------------- values of signal --------------------
 
-  sealed trait Value[T <: Type]
+  sealed abstract class Value[T <: Type]
 
   case class BitV(value: 0 | 1) extends Value[Bit]
 
@@ -33,6 +33,16 @@ object lang {
   case class VecV[T <: Num](map: Int => 0 | 1, size: Int) extends Value[Vec[T]] {
     def apply(i: Int): 0 | 1 = map(i)
   }
+
+  def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toInt: Int = value match {
+    case BitV(value) => value
+    case VecV(map, size) =>
+      (0 until size).foldLeft(0) { (acc, i) => acc | (map(i) & 1) << i }
+  }
+
+  def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toShort: Short = value.toInt.toShort
+
+  def [T <: Num](value: Value[Vec[T]]) toChar: Int = value.toInt.toChar
 
   // ---------------- abstract syntax trees --------------------
 
@@ -57,7 +67,7 @@ object lang {
 
   var count = 0
 
-  sealed trait Signal[T <: Type] {
+  sealed abstract class Signal[T <: Type] {
     count += 1
 
     def ~[U <: Type](rhs: Signal[U]): Signal[T ~ U] = Par(this, rhs)
@@ -219,6 +229,10 @@ object lang {
   object ~ {
     def unapply[S <: Type, T <: Type](sig: Signal[S ~ T]): (Signal[S], Signal[T]) =
       (sig.left, sig.right)
+
+    def unapply[S <: Type, T <: Type](value: Value[S ~ T]): (Value[S], Value[T]) = value match {
+      case PairV(lhs, rhs) => (lhs, rhs)
+    }
   }
 
   def fsm[S <: Type, T <: Type](name: String, init: Value[S])(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
@@ -244,7 +258,7 @@ object lang {
       VecLit(bits).asInstanceOf
   }
 
-  inline def input[T <: Type](name: String): Signal[T] =
+  inline def variable[T <: Type](name: String): Var[T] =
     Var(Symbol(name), typeOf[T])
 
   def [S <: Type, T <: Type](lhs: Value[S]) ~ (rhs: Value[T]): Value[S ~ T] =

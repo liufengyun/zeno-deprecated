@@ -44,3 +44,5 @@ store 0
 
 loadi 33
 store 0
+
+exit
