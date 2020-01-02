@@ -313,9 +313,9 @@ object phases {
       val (bits, bout) = (0 until size).foldLeft((Nil, 0): (List[Int], Int)) { case ((bits, bin), i) =>
         val a = lhs(i)
         val b = rhs(i)
-        val s = a ^ b ^ bin
-        val bout = (~a & b) | (~a | bin) | (b & bin)
-        (s :: bits, bout)
+        val d = a ^ b ^ bin
+        val bout = ((1 - a) & b) | ((1 - a) & bin) | (b & bin)
+        (d :: bits, bout)
       }
 
       VecV(bits.asInstanceOf[List[1 | 0]])
