@@ -353,7 +353,7 @@ object phases {
 
       case At(vec, index)         =>
         recur(vec) match {
-          case VecV(bits) => BitV(bits(index))
+          case vec: VecV[_] => BitV(vec(index))
         }
 
       case Range(vec, from, to)   =>

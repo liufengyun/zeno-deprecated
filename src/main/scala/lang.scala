@@ -31,14 +31,15 @@ object lang {
   case class PairV[S <: Type, T <: Type](lhs: Value[S], rhs: Value[T]) extends Value[S ~ T]
 
   case class VecV[T <: Num](bits: List[0 | 1]) extends Value[Vec[T]] {
-    def apply(i: Int): 0 | 1 = bits(i)
+    // bits are stored in reverse order
+    def apply(i: Int): 0 | 1 = bits(size - i - 1)
     def size: Int = bits.size
   }
 
   def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toInt: Int = value match {
     case BitV(value) => value
     case VecV(bits) =>
-      bits.foldLeft(0) { (acc, i) => acc | (bits(i) & 1) << i }
+      bits.foldLeft(0) { (acc, i) => acc | ((i & 1) << i) }
   }
 
   def [T <: Num](value: Value[Bit] | Value[Vec[T]]) toShort: Short = value.toInt.toShort
@@ -276,12 +277,12 @@ object lang {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n >= 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
 
-    val bits = (0 until N).foldRight(Nil: List[Int]) { (i, acc) =>
-      val bit = if (n & (1 << i)) == 0 then 0 else 1
+    val bits = (0 until N).foldLeft(Nil: List[0|1]) { (acc, i) =>
+      val bit: 0 | 1 = if (n & (1 << i)) == 0 then 0 else 1
       bit :: acc
     }
 
-    VecV(bits.asInstanceOf[List[0 | 1]]).asInstanceOf[Value[Vec[N.type]]]
+    VecV(bits).asInstanceOf[Value[Vec[N.type]]]
   }
 
   /** Int -> Bits, take the least significant N bits */

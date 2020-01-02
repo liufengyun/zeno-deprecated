@@ -228,35 +228,31 @@ object Controller {
 
     var input: Value[BusIn] = 0.toValue(32)
     while(run) {
-      val (addrV ~ readV ~ writeV ~ writedataV) ~ (accV ~ pcV ~ instrV ~ exitV) = fsm(input)
+      val (addr ~ read ~ write ~ writedata) ~ (acc ~ pc ~ instr ~ exit) = fsm(input)
 
-      val isRd = readV.toInt == 1
-      val isWr = writeV.toInt == 1
-      val addr = addrV.toShort
-
-      if (isWr) {
-        val data = writedataV.toInt
-        if (addr == 0) {
+      if (read.toInt == 1) {
+        val data = writedata.toInt
+        if (addr.toShort == 0) {
           val char = data.toChar
           sb.append(char)
         }
         else {
-          memory(addr) = data
+          memory(addr.toShort) = data
         }
       }
 
-      if (isRd) {
-        val data = memory.getOrElse(addr, 0)
+      if (write.toInt == 1) {
+        val data = memory.getOrElse(addr.toShort, 0)
         input = data.toValue(32)
       }
 
-      println("pc = " + pcV.asInstanceOf[Value[Vec[0]]].toInt)
-      println("acc = " + accV.toInt)
+      println("pc = " + pc.asInstanceOf[Value[Vec[0]]].toInt)
+      println("acc = " + acc.toInt)
 
       displayPrompt()
 
       maxInstructions -= 1
-      run = exitV.toInt == 0 && maxInstructions > 0
+      run = exit.toInt == 0 && maxInstructions > 0
     }
 
     val checkFile = prog + ".check"
