@@ -312,8 +312,13 @@ object lang {
 
   val vecEmpty: Signal[Vec[0]] = VecLit[0](Nil)
 
-  def vec[T <: Num](bits: (1 | 0)*): Signal[Vec[T]] =
+  def Vec[T <: Num](bit: 1 | 0, bits: (1 | 0)*): Signal[Vec[T]] =
     VecLit[T](bits.toList)
+
+  def Vec[T <: Num](bits: Signal[Bit]*): Signal[Vec[T]] =
+    bits.foldRight(VecLit[0](Nil).as[Vec[T]]) { (bit, acc) =>
+      bit :: acc
+    }
 
   def [N <: Num, U <: Num](sig: Signal[Bit]) :: (vec: Signal[Vec[N]]): Signal[Vec[U]] = Cons[N, U](sig, vec)
 

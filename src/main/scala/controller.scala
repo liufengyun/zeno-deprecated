@@ -209,11 +209,7 @@ object Controller {
     }
   }
 
-  def test(prog: String): Unit = {
-    import java.nio.charset.StandardCharsets._
-    import java.nio.file.{Files, Paths, FileSystems, Path}
-    import java.io.File
-
+  def test(prog: String): String = {
     val busIn = variable[BusIn]("busIn")
     val instructions = Assembler.assemble(prog)
     val code = processor(instructions, busIn)
@@ -255,16 +251,7 @@ object Controller {
       run = exit.toInt == 0 && maxInstructions > 0
     }
 
-    val checkFile = prog + ".check"
-    val check =
-      if (new File(checkFile).exists)
-        new String(Files.readAllBytes(Paths.get(checkFile)), UTF_8)
-      else
-        "<empty>"
-    val msg = "expected = " + check + ", found = " + sb.toString
-
-    if (check.trim == sb.toString) println(Console.GREEN + msg + Console.RESET)
-    else println(Console.RED + msg + Console.RESET)
+    sb.toString
   }
 
   /** Show prompt if `-Xprompt` is passed as a flag to the compiler */
