@@ -239,14 +239,102 @@ object phases {
   def detuple[T <: Type](sig: Signal[T]): Signal[T] = ???
 
 
-  def interpret[T <: Type, S <: Type](circuit: Circuit[S, T]): Value[S] => Value[T] = {
-    def and[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = ???
-    def or[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = ???
-    def not[T <: Type](in: Value[T]): Value[T] = ???
-    def equals[T <: Type](lhs: Value[T], rhs: Value[T]): Value[Bit] = ???
-    def plus[T <: Num](lhs: Value[Vec[T]], rhs: Value[Vec[T]]): Value[Vec[T]] = ???
-    def minus[T <: Num](lhs: Value[Vec[T]], rhs: Value[Vec[T]]): Value[Vec[T]] = ???
-    def shift[T <: Num, S <: Num](lhs: Value[Vec[T]], rhs: Value[Vec[S]], isLeft: Boolean): Value[Vec[T]] = ???
+  def interpret[T <: Type, S <: Type](input: Var[S], body: Signal[T]): Value[S] => Value[T] = {
+    def and[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = (lhs, rhs) match {
+      case (BitV(v1), BitV(v2)) =>
+        BitV((v1 & v2).asInstanceOf[0 | 1])
+
+      case (PairV(lhs1, rhs1), PairV(lhs2, rhs2)) =>
+        PairV(and(lhs1, lhs2), and(rhs1, rhs2))
+
+      case (VecV(map1, size1), VecV(map2, size2)) if size1 == size2 =>
+        VecV(i => (map1(i) & map2(i)).asInstanceOf[0 | 1], size1).asInstanceOf
+
+      case _ => ??? // impossible
+    }
+
+    def or[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = (lhs, rhs) match {
+      case (BitV(v1), BitV(v2)) =>
+        BitV((v1 | v2).asInstanceOf[0 | 1])
+
+      case (PairV(lhs1, rhs1), PairV(lhs2, rhs2)) =>
+        PairV(or(lhs1, lhs2), or(rhs1, rhs2))
+
+      case (VecV(map1, size1), VecV(map2, size2)) if size1 == size2 =>
+        VecV(i => (map1(i) | map2(i)).asInstanceOf[0 | 1], size1).asInstanceOf
+
+      case _ => ??? // impossible
+    }
+
+    def not[T <: Type](in: Value[T]): Value[T] = in match {
+      case BitV(v) =>
+        BitV(if (v == 1) 0 else 1)
+
+      case PairV(lhs, rhs) =>
+        PairV(not(lhs), not(rhs))
+
+      case VecV(map, size) =>
+        VecV(i => if (map(i) == 1) 0 else 1, size).asInstanceOf
+    }
+
+    def equals[T <: Type](lhs: Value[T], rhs: Value[T]): Value[Bit] = (lhs, rhs) match {
+      case (BitV(v1), BitV(v2)) =>
+        BitV(if (v1 == v2) 1 else 0)
+
+      case (PairV(lhs1, rhs1), PairV(lhs2, rhs2)) =>
+        and(equals(lhs1, lhs2), equals(rhs1, rhs2))
+
+      case (VecV(map1, size1), VecV(map2, size2)) if size1 == size2 =>
+        (0 to size1).foldLeft(BitV(1)) { (acc, i) =>
+          if (map1(i) == map2(i)) acc else BitV(0)
+        }
+
+      case _ => ??? // impossible
+    }
+
+    def plus[T <: Num](lhs: VecV[T], rhs: VecV[T]): VecV[T] = {
+      val size = lhs.size
+
+      val (bits, cout) = (0 until size).foldLeft((Nil, 0): (List[Int], Int)) { case ((bits, cin), i) =>
+        val a = lhs(i)
+        val b = rhs(i)
+        val s = a ^ b ^ cin
+        val cout = (a & b) | (cin & (a ^ b))
+        (s :: bits, cout)
+      }
+
+      VecV(bits.asInstanceOf[List[1 | 0]], bits.size)
+    }
+
+    def minus[T <: Num](lhs: VecV[T], rhs: VecV[T]): VecV[T] = {
+      val size = lhs.size
+
+      val (bits, bout) = (0 until size).foldLeft((Nil, 0): (List[Int], Int)) { case ((bits, bin), i) =>
+        val a = lhs(i)
+        val b = rhs(i)
+        val s = a ^ b ^ bin
+        val bout = (~a & b) | (~a | bin) | (b & bin)
+        (s :: bits, bout)
+      }
+
+      VecV(bits.asInstanceOf[List[1 | 0]], bits.size)
+    }
+
+    def shift[T <: Num, S <: Num](lhs: VecV[T], rhs: VecV[S], isLeft: Boolean): VecV[T] = {
+      val bits: List[Int] = (0 until lhs.size).map(lhs(_)).toList
+      val res = (0 until rhs.size).foldLeft(bits) { (acc, i) =>
+        val bitsToShift = 1 << i
+        val padding = (0 until bitsToShift).map(_ => 0).toList
+        val shifted =
+          if (isLeft) acc.drop(bitsToShift) ++ padding
+          else padding ++ acc.dropRight(bitsToShift)
+
+        if (rhs(i) == 1) shifted
+        else acc
+      }
+
+      VecV(res.asInstanceOf[List[0 | 1]], res.size)
+    }
 
     def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value[_]]): Value[T] = sig match {
       case Par(lhs, rhs)          =>
@@ -313,12 +401,12 @@ object phases {
       case Plus(lhs, rhs)       =>
         val lhsV = recur(lhs)
         val rhsV = recur(rhs)
-        plus(lhsV, rhsV)
+        plus(lhsV.asInstanceOf, rhsV.asInstanceOf).asInstanceOf
 
       case Minus(lhs, rhs)      =>
         val lhsV = recur(lhs)
         val rhsV = recur(rhs)
-        minus(lhsV, rhsV)
+        minus(lhsV.asInstanceOf, rhsV.asInstanceOf).asInstanceOf
 
       case Mux(cond, thenp, elsep)  =>
         val bitV: BitV = recur(cond).asInstanceOf[BitV]
@@ -328,14 +416,14 @@ object phases {
       case Shift(lhs, rhs, isLeft)   =>
         val lhsV = recur(lhs)
         val rhsV = recur(rhs)
-        shift(lhsV, rhsV, isLeft)
+        shift(lhsV.asInstanceOf, rhsV.asInstanceOf, isLeft).asInstanceOf
     }
 
-    flatten(lift(circuit.body)) match {
+    flatten(lift(body)) match {
       case Fsm(sym, init, body) =>
         var lastState = init
         (v: Value[S]) => {
-          val env = Map(circuit.in.sym -> v, sym -> init)
+          val env = Map(input.sym -> v, sym -> init)
           recur(body)(env) match {
             case PairV(lhs, rhs) =>
               lastState = lhs
@@ -344,7 +432,7 @@ object phases {
         }
 
       case code => // combinational
-        (v: Value[S]) => recur(code)(Map(circuit.in.sym -> v))
+        (v: Value[S]) => recur(code)(Map(input.sym -> v))
     }
 
   }

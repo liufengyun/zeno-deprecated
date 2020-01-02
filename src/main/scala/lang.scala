@@ -185,8 +185,6 @@ object lang {
     val tpe: Type = vec.tpe
   }
 
-  case class Circuit[S <: Type, T <: Type](in: Var[S], body: Signal[T])
-
   // ---------------- type operations --------------------
 
   inline def typeOf[T <: Type]: T = inline erasedValue[T] match {
@@ -305,19 +303,19 @@ object lang {
 
   def [N <: Num](vec: Signal[Vec[N]]) size: Int = vec.tpe.asInstanceOf[Vec[N]].size
 
-  private  def shiftImpl[M <: Num, N <: Num](vec: Signal[Vec[M]], amount: Signal[Vec[N]], isLeft: Boolean): Signal[Vec[M]] = {
+  private  def shiftImpl[M <: Num, N <: Num](vec: Signal[Vec[N]], amount: Signal[Vec[M]], isLeft: Boolean): Signal[Vec[N]] = {
     val n: Int = vec.size
     val m: Int = amount.size
 
     // index starts from least significant bit of `amount`
-    def recur(index: Int, toShift: Signal[Vec[M]]): Signal[Vec[M]] =
+    def recur(index: Int, toShift: Signal[Vec[N]]): Signal[Vec[N]] =
       if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
         val padding = 0.toSignal(bitsToShift)
-        val shifted: Signal[Vec[M]] =
-          if (isLeft) (toShift(bitsToShift, n - 1) ++ padding).as[Vec[M]]
-          else (padding ++ toShift(0, n - bitsToShift - 1)).as[Vec[M]]
+        val shifted: Signal[Vec[N]] =
+          if (isLeft) (toShift(bitsToShift, n - 1) ++ padding).as[Vec[N]]
+          else (padding ++ toShift(0, n - bitsToShift - 1)).as[Vec[N]]
 
         val test =
           when (amount(index).as[Bit]) {
