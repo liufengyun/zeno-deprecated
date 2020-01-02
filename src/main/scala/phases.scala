@@ -296,6 +296,8 @@ object phases {
     def plus[T <: Num](lhs: VecV[T], rhs: VecV[T]): VecV[T] = {
       val size = lhs.size
 
+      assert(lhs.size == rhs.size, "lhs.size = " + lhs.size + ", rhs.size = " + rhs.size)
+
       val (bits, cout) = (0 until size).foldLeft((Nil, 0): (List[Int], Int)) { case ((bits, cin), i) =>
         val a = lhs(i)
         val b = rhs(i)
@@ -309,6 +311,8 @@ object phases {
 
     def minus[T <: Num](lhs: VecV[T], rhs: VecV[T]): VecV[T] = {
       val size = lhs.size
+
+      assert(lhs.size == rhs.size, "lhs.size = " + lhs.size + ", rhs.size = " + rhs.size)
 
       val (bits, bout) = (0 until size).foldLeft((Nil, 0): (List[Int], Int)) { case ((bits, bin), i) =>
         val a = lhs(i)

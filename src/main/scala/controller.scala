@@ -84,7 +84,7 @@ object Controller {
   def processor(prog: Array[Int], busIn: Signal[BusIn]): Signal[BusOut ~ Debug] = {
     assert(prog.size > 0)
     var addrW = 1
-    while ((1 << addrW) < prog.size) addrW+=1
+    while ((1 << addrW) < prog.size) addrW += 1
 
     val addrWidth = addrW
     type PC  = Vec[addrWidth.type]
@@ -104,7 +104,7 @@ object Controller {
           val operand = (0.toSignal(24) ++ instr(7, 0)).as[Vec[32]]
           val opcode  = instr(15, 8).as[Vec[8]]
 
-          val jmpAddr = instr(addrWidth, 0).as[PC]
+          val jmpAddr = instr(addrWidth - 1, 0).as[PC]
           val busAddr = instr(7, 0).as[Vec[8]]
           val shiftOperand = instr(3, 0).as[Vec[4]]
 
