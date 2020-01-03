@@ -208,11 +208,11 @@ object phases {
   /** Flatten a lifted tree */
   def flatten[T <: Type](tree: Signal[T]): Signal[T] = tree match {
     case Fsm(sym1, init1, Fsm(sym2, init2, body2)) =>
-      fsm(sym1.name + "_" + sym2.name, init1 ~ init2) { state =>
+      fsm(sym1.name + "_" + sym2.name, init1 ~ init2) { (state: Signal[T]) =>
         Let(sym1, state.asPair.left,
           Let(sym2, state.asPair.right,
             let("x", body2) { x =>
-              ((x.right.left ~ x.left) ~ x.right.right).asInstanceOf
+              ((x.right.left ~ x.left) ~ x.right.right).as[T ~ T]
             }
           )
         )
@@ -414,7 +414,7 @@ object phases {
     }
 
     def shift(lhs: VecV, rhs: VecV, isLeft: Boolean): VecV = {
-      val bits: List[Int] = (0 until lhs.size).map(lhs(_)).toList
+      val bits: List[Int] = lhs.bits
       val res = (0 until rhs.size).foldLeft(bits) { (acc, i) =>
         val bitsToShift = 1 << i
         val padding = (0 until bitsToShift).map(_ => 0).toList

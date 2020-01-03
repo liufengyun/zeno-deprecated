@@ -84,4 +84,35 @@ class TestSuite {
     }
   }
 
+  @Test def filter(): Unit = {
+    val a = variable[Vec[8]]("a")
+    val circuit = Filter.movingAverage(a)
+    val avg = phases.interpret(List(a), circuit)
+
+    // println(show(phases.flatten(phases.lift(circuit))))
+
+    val o1 = avg(10.toValue(8) :: Nil)
+    assertEquals(o1.toInt, 2)
+
+    val o2 = avg(20.toValue(8) :: Nil)
+    assertEquals(o2.toInt, 10)
+
+    val o3 = avg(20.toValue(8) :: Nil)
+    assertEquals(o3.toInt, 17)
+  }
+
+  @Test def arithmetic(): Unit = {
+    val a = variable[Vec[8]]("a")
+    val b = variable[Vec[4]]("b")
+    val circuit = a << b
+    val shift = phases.interpret(List(a, b), circuit)
+
+    // println(show(circuit))
+
+    val o1 = shift(1.toValue(8) :: 1.toValue(4) :: Nil)
+    assertEquals(o1.toInt, 2)
+
+    val o2 = shift(2.toValue(8) :: 2.toValue(4) :: Nil)
+    assertEquals(o2.toInt, 8)
+  }
 }
