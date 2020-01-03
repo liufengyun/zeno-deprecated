@@ -47,14 +47,14 @@ class TestSuite {
     val add2 = phases.interpret(List(a, b), circuit)
 
     {
-      val Bits(c1, s1, s0) = add2(Bits(1, 0) :: Bits(0, 1) :: Nil)
+      val Value(c1, s1, s0) = add2(Value(1, 0) :: Value(0, 1) :: Nil)
       assertEquals(c1, 0)
       assertEquals(s1, 1)
       assertEquals(s0, 1)
     }
 
     {
-      val Bits(c1, s1, s0) = add2(Bits(1, 0) :: Bits(1, 1) :: Nil)
+      val Value(c1, s1, s0) = add2(Value(1, 0) :: Value(1, 1) :: Nil)
       assertEquals(c1, 1)
       assertEquals(s1, 0)
       assertEquals(s0, 1)
@@ -68,7 +68,7 @@ class TestSuite {
     val add3 = phases.interpret(List(a, b), circuit)
 
     {
-      val Bits(c2) ~ Bits(s2, s1, s0) = add3(Bits(1, 0, 1) :: Bits(0, 1, 0) :: Nil)
+      val Value(c2) ~ Value(s2, s1, s0) = add3(Value(1, 0, 1) :: Value(0, 1, 0) :: Nil)
       assertEquals(c2, 0)
       assertEquals(s2, 1)
       assertEquals(s1, 1)
@@ -76,7 +76,7 @@ class TestSuite {
     }
 
     {
-      val Bits(c2) ~ Bits(s2, s1, s0) = add3(Bits(1, 0, 1) :: Bits(1, 1, 1) :: Nil)
+      val Value(c2) ~ Value(s2, s1, s0) = add3(Value(1, 0, 1) :: Value(1, 1, 1) :: Nil)
       assertEquals(c2, 1)
       assertEquals(s2, 1)
       assertEquals(s1, 0)

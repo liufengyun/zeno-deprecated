@@ -374,8 +374,8 @@ object phases {
         and(equals(lhs1, lhs2), equals(rhs1, rhs2))
 
       case (VecV(bits1), VecV(bits2)) if bits1.size == bits2.size =>
-        (0 until bits1.size).foldLeft(Bits(1)) { (acc, i) =>
-          if (bits1(i) == bits2(i)) acc else Bits(0)
+        (0 until bits1.size).foldLeft(Value(1)) { (acc, i) =>
+          if (bits1(i) == bits2(i)) acc else Value(0)
         }
 
       // case _ => ??? // impossible
@@ -447,7 +447,7 @@ object phases {
 
       case At(vec, index)         =>
         recur(vec) match {
-          case vec: VecV => Bits(vec(index))
+          case vec: VecV => Value(vec(index))
           case _ => ??? // imposiible
         }
 
@@ -498,7 +498,7 @@ object phases {
         minus(lhsV, rhsV)
 
       case Mux(cond, thenp, elsep)  =>
-        val Bits(bitV) = recur(cond)
+        val Value(bitV) = recur(cond)
         if (bitV == 1) recur(thenp)
         else recur(elsep)
 

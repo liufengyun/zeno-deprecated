@@ -35,7 +35,7 @@ object lang {
       VecV(bits.dropRight(from).drop(bits.size - to - 1))
   }
 
-  object Bits {
+  object Value {
     def apply(bit: 0 | 1, bits: (0 | 1)*): Value =
       new VecV(bit :: bits.toList)
 
