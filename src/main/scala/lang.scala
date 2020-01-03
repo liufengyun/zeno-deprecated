@@ -96,6 +96,11 @@ object lang {
       this.as[S ~ U]
     }
 
+    def width: Int = tpe match {
+      case vec: Vec[_] => vec.size
+      case _ => throw new Exception("access size on non-vector signal")
+    }
+
 
     def tpe: Type
   }
@@ -144,7 +149,9 @@ object lang {
     }
   }
 
-  case class Var[T <: Type](sym: Symbol, tpe: Type) extends Signal[T]
+  case class Var[T <: Type](sym: Symbol, tpe: Type) extends Signal[T] {
+    val name: String = sym.name
+  }
 
   case class Let[S <: Type, T <: Type](sym: Symbol, sig: Signal[S],  body: Signal[T]) extends Signal[T] {
     val tpe: Type = body.tpe

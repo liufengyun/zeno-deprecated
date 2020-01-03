@@ -520,7 +520,7 @@ object phases {
               // println("out = " + rhs)
               rhs
             case vec: VecV =>  // after detupling
-              val sepIndex = fsm.tpe.asInstanceOf[Vec[_]].size
+              val sepIndex = fsm.width
               lastState = vec(vec.size - 1, sepIndex)
               vec(sepIndex - 1, 0)
           }
@@ -532,7 +532,149 @@ object phases {
 
   }
 
-  def verilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = ???
+
+  def verilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
+    val normSig = detuple(flatten(lift(sig)))
+
+    import scala.collection.mutable.ListBuffer
+
+    val wires: ListBuffer[String] = ListBuffer.empty
+    val assigns: ListBuffer[String] = ListBuffer.empty
+    val regs: ListBuffer[String] = ListBuffer.empty
+
+    def template(body: String, sequential: Boolean = false): String = {
+      val inputNames = input.map(_.name).mkString(", ")
+      val inputDecls = input.map { variable =>
+        val hi = detuple(variable).width -  1
+        s"input [$hi:0] ${variable.name};"
+      }.mkString("\n")
+
+      val outDecl = {
+        val hi = normSig.width - 1
+        s"output [$hi:0] out;"
+      }
+      wires += "wire out;"
+
+      val clockPort = if (sequential) "CLK, " else ""
+      val clockDecl = if (sequential) "input CLK;\n" else ""
+
+      s"module $moduleName ($clockPort $inputNames, out);\n" +
+      clockDecl +
+      s"$inputDecls\n" +
+      s"$outDecl\n" +
+      wires.mkString + "\n" +
+      regs.mkString + "\n\n" +
+      assigns.mkString + "\n\n" +
+      s"$body\n" +
+      "endmodule\n"
+    }
+
+    def letHandler(let: Let[_, _]): String = {
+      val name = let.sym.name
+      val hi = let.sig.width - 1
+      wires += s"wire [$hi:0] $name;"
+
+      val rhs = recur(let.sig)
+      assigns += s"assign $name = $rhs;"
+
+      recur(let.body)
+    }
+
+    def bits2Verilog(bits: List[Int]): String = {
+      val bin = bits.map(_.toString).mkString
+      val s = bits.size
+      s"$s'b$bin"
+    }
+
+    def recur[T <: Type](sig: Signal[T]): String = { /* println(show(sig)); */ sig} match {
+      case At(vec, index)         =>
+        val vec1 = recur(vec)
+        s"$vec1[$index]"
+
+      case Range(vec, to, from)   =>
+        val vec1 = recur(vec)
+        s"$vec1[$to:$from]"
+
+      case VecLit(bits)           =>
+        bits2Verilog(bits)
+
+      case Var(sym, tpe)          =>
+        sym.name
+
+      case let @ Let(_, _, _)    =>
+        letHandler(let)
+
+      case And(lhs, rhs)          =>
+        "( " + recur(lhs) + " & " + recur(rhs) + " )"
+
+      case Or(lhs, rhs)           =>
+        "( " + recur(lhs) + " | " + recur(rhs) + " )"
+
+      case Not(in)                =>
+        "~" + recur(in)
+
+      case Concat(lhs, rhs)     =>
+        "{" + recur(lhs) + ", " + recur(rhs) + " }"
+
+      case Equals(lhs, rhs)     =>
+        "( " + recur(lhs) + " == " + recur(rhs) + " )"
+
+      case Plus(lhs, rhs)       =>
+        "( " + recur(lhs) + " + " + recur(rhs) + " )"
+
+      case Minus(lhs, rhs)      =>
+        "( " + recur(lhs) + " - " + recur(rhs) + " )"
+
+      case Mux(cond, thenp, elsep)  =>
+        "( " + recur(cond) + "? " + recur(thenp) + " : " + recur(elsep) + " )"
+
+      case Shift(lhs, rhs, isLeft)   =>
+        val op = if (isLeft) "<<" else ">>"
+
+        "( " + recur(lhs) + s" $op " + recur(rhs) + " )"
+
+      case Par(_, _) | Left(_) | Right(_) =>
+        ??? // impossible after detupling
+
+      case Fsm(_, _, _)   =>
+        ??? // impossible after flattening
+    }
+
+
+    normSig match {
+      case fsm @ Fsm(sym, init, body) =>
+        val hi = body.width - 1
+        val lo = fsm.width
+        val hiOut = lo - 1
+
+        val next = recur(body)
+        wires += s"wire [$hi:0] next;"
+        assigns += s"assign next = $next;"
+        assigns += s"assign out = next[$hiOut:0];"
+
+        val stateHi = body.width - fsm.width - 1
+        regs += s"reg [$stateHi:0] state;"
+
+        val initial = {
+          val bin = bits2Verilog(init.asInstanceOf[VecV].bits)
+          s"""|initial begin
+              |  state = $bin;
+              |end\n\n""".stripMargin
+        }
+
+        val always = {
+          s"""|always @ (posedge CLK)
+              |  state <= next[$hi:$lo]\n\n""".stripMargin
+        }
+
+        template(initial + always)
+
+      case code => // combinational
+        val out = recur(code)
+        assigns += "assign out = $out;"
+        template("")
+    }
+  }
 
   def simulator[T <: Type](sig: Signal[T]): String = ???
 
