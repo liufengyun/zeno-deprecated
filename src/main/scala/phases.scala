@@ -532,8 +532,7 @@ object phases {
 
   }
 
-
-  def verilog[T <: Type](sig: Signal[T]): String = ???
+  def verilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = ???
 
   def simulator[T <: Type](sig: Signal[T]): String = ???
 

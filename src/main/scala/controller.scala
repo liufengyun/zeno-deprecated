@@ -50,10 +50,10 @@ object Controller {
   type INSTR = Vec[16]
 
   def instrMemory(addrWidth: Int, prog: Array[Int], addr: Signal[Vec[addrWidth.type]]): Signal[Vec[16]] = {
-    val default: Signal[Vec[16]] = 0.toSignal(16)
+    val default: Signal[Vec[16]] = 0.W[16]
     (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
-      when[Vec[16]] (addr === curAddr.toSignal(addrWidth)) {
-        if (curAddr < prog.size) prog(curAddr).toSignal(16)
+      when[Vec[16]] (addr === curAddr.W[addrWidth.type]) {
+        if (curAddr < prog.size) prog(curAddr).W[16]
         else default
       } otherwise {
         acc
@@ -64,17 +64,17 @@ object Controller {
   def stage2(instr: Signal[INSTR], acc: Signal[ACC], busIn: Signal[BusIn]): Signal[ACC] = {
     val opcode  = instr(15, 8).as[Vec[8]]
 
-    when (opcode === ADD.toSignal(8)) {
+    when (opcode === ADD.W[8]) {
       (acc + busIn).as[ACC]
-    } .when (opcode === SUB.toSignal(8)) {
+    } .when (opcode === SUB.W[8]) {
       (acc - busIn).as[ACC]
-    } .when (opcode === LD.toSignal(8)) {
+    } .when (opcode === LD.W[8]) {
       busIn
-    } .when (opcode === AND.toSignal(8)) {
+    } .when (opcode === AND.W[8]) {
       acc & busIn
-    } .when (opcode === OR.toSignal(8)) {
+    } .when (opcode === OR.W[8]) {
       acc | busIn
-    } .when (opcode === XOR.toSignal(8)) {
+    } .when (opcode === XOR.W[8]) {
       acc ^ busIn
     } .otherwise {
       acc
@@ -93,22 +93,22 @@ object Controller {
     val accInit: Value  = 0.toValue(32)
     val lastInit: Value = 0.toValue(16)
 
-    val defaultBusOut: Signal[BusOut] = 0.toSignal(8) ~ 0 ~ 0 ~ 0.toSignal(32)
+    val defaultBusOut: Signal[BusOut] = 0.W[8] ~ 0 ~ 0 ~ 0.W[32]
 
     fsm("processor", pcInit ~ accInit ~ lastInit) { (state: Signal[PC ~ ACC ~ INSTR]) =>
       val pc ~ acc ~ lastInstr = state
 
-      let("pcNext", (pc + 1.toSignal(addrWidth)).as[PC]) { pcNext =>
+      let("pcNext", (pc + 1.W[addrWidth.type]).as[PC]) { pcNext =>
 
         let("instr", instrMemory(addrWidth, prog, pc)) { instr =>
-          val operand = (0.toSignal(24) ++ instr(7, 0)).as[Vec[32]]
+          val operand = (0.W[24] ++ instr(7, 0)).as[Vec[32]]
           val opcode  = instr(15, 8).as[Vec[8]]
 
           val jmpAddr = instr(addrWidth - 1, 0).as[PC]
           val busAddr = instr(7, 0).as[Vec[8]]
           val shiftOperand = instr(3, 0).as[Vec[4]]
 
-          val loadBusOut: Signal[BusOut] = busAddr ~ 1 ~ 0 ~ 0.toSignal(32)
+          val loadBusOut: Signal[BusOut] = busAddr ~ 1 ~ 0 ~ 0.W[32]
 
           // forward acc from stage 2
           let("stage2Acc", stage2(lastInstr, acc, busIn)) { acc =>
@@ -116,7 +116,7 @@ object Controller {
             def next(
               pc: Signal[PC] = pcNext,
               acc: Signal[ACC] = acc,
-              pendingInstr: Signal[INSTR] = 0.toSignal(16),
+              pendingInstr: Signal[INSTR] = 0.W[16],
               out: Signal[BusOut] = defaultBusOut,
               exit: Boolean = false
             ): Signal[(PC ~ ACC ~ INSTR) ~ (BusOut ~ Debug)] = {
@@ -124,79 +124,79 @@ object Controller {
               (pc ~ acc ~ pendingInstr) ~ (out ~ debug)
             }
 
-            when (opcode === ADDI.toSignal(8)) {
+            when (opcode === ADDI.W[8]) {
               val acc2 = (acc + operand).as[ACC]
               next(acc = acc2)
 
-            } .when (opcode === SUBI.toSignal(8)) {
+            } .when (opcode === SUBI.W[8]) {
               val acc2 = (acc - operand).as[ACC]
               next(acc = acc2)
 
-            } .when (opcode === LDI.toSignal(8)) {
+            } .when (opcode === LDI.W[8]) {
               next(acc = operand)
 
-            } .when (opcode === ST.toSignal(8)) {
+            } .when (opcode === ST.W[8]) {
               val busOut: Signal[BusOut] = busAddr ~ 0 ~ 1 ~ acc
               next(out = busOut)
 
-            } .when (opcode === ANDI.toSignal(8)) {
+            } .when (opcode === ANDI.W[8]) {
               val acc2 = acc & operand
               next(acc = acc2)
 
-            } .when (opcode === ORI.toSignal(8)) {
+            } .when (opcode === ORI.W[8]) {
               val acc2 = acc | operand
               next(acc = acc2)
 
-            } .when (opcode === XORI.toSignal(8)) {
+            } .when (opcode === XORI.W[8]) {
               val acc2 = acc ^ operand
               next(acc = acc2)
 
-            } .when (opcode === SHL.toSignal(8)) {
+            } .when (opcode === SHL.W[8]) {
               val acc2 = (acc << shiftOperand).as[ACC]
               next(acc = acc2)
 
-            } .when (opcode === SHR.toSignal(8)) {
+            } .when (opcode === SHR.W[8]) {
               val acc2 = (acc >> shiftOperand).as[ACC]
               next(acc = acc2)
 
-            } .when (opcode === BR.toSignal(8)) {
+            } .when (opcode === BR.W[8]) {
               next(pc = jmpAddr)
 
-            } .when (opcode === BRZ.toSignal(8)) {
-              when(acc === 0.toSignal(32)) {
+            } .when (opcode === BRZ.W[8]) {
+              when(acc === 0.W[32]) {
                 next(pc = jmpAddr)
               }
               .otherwise {
                 next()
               }
 
-            } .when (opcode === BRNZ.toSignal(8)) {
-              when(acc === 0.toSignal(32)) {
+            } .when (opcode === BRNZ.W[8]) {
+              when(acc === 0.W[32]) {
                 next()
               }
               .otherwise {
                 next(pc = jmpAddr)
               }
 
-            } .when (opcode === ADD.toSignal(8)) {
+            } .when (opcode === ADD.W[8]) {
               next(out = loadBusOut, pendingInstr = instr)
 
-            } .when (opcode === SUB.toSignal(8)) {
+            } .when (opcode === SUB.W[8]) {
               next(out = loadBusOut, pendingInstr = instr)
 
-            } .when (opcode === LD.toSignal(8)) {
+            } .when (opcode === LD.W[8]) {
               next(out = loadBusOut, pendingInstr = instr)
 
-            } .when (opcode === AND.toSignal(8)) {
+            } .when (opcode === AND.W[8]) {
               next(out = loadBusOut, pendingInstr = instr)
 
-            } .when (opcode === OR.toSignal(8)) {
+            } .when (opcode === OR.W[8]) {
               next(out = loadBusOut, pendingInstr = instr)
 
-            } .when (opcode === XOR.toSignal(8)) {
+            } .when (opcode === XOR.W[8]) {
               next(out = loadBusOut, pendingInstr = instr)
 
-            } .when (opcode === EXIT.toSignal(8)) {
+            } .when (opcode === EXIT.W[8]) {
               next(exit = true)
 
             } .otherwise { // NOP

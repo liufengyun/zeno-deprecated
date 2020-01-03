@@ -80,6 +80,8 @@ object lang {
 
   var count = 0
 
+  // TODO: T should be covariant to support `Signal[Vec[5]] <: Signal[Vec[_]]`
+  //       Currently, Dotty crashes with the change.
   sealed abstract class Signal[T <: Type] {
     count += 1
 
@@ -316,7 +318,8 @@ object lang {
   }
 
   /** Int -> Bits, take the least significant N bits */
-  def (n: Int) toSignal(N: Int): Signal[Vec[N.type]] = {
+  def [N <: Num](n: Int) W(implicit M: ValueOf[N]): Signal[Vec[N]] = {
+    val N = M.value.asInstanceOf[Int]
     val bits = (0 until N).foldLeft(Nil: List[0|1]) { (acc, i) =>
       val bit: 0 | 1 = if (n & (1 << i)) == 0 then 0 else 1
       bit :: acc
@@ -332,11 +335,11 @@ object lang {
   def [M <: Num, N <: Num](vec: Signal[Vec[M]]) >> (amount: Signal[Vec[N]]): Signal[Vec[M]] =
     Shift(vec, amount, isLeft = false)
 
-  def [N <: Num](vec1: Signal[Vec[N]]) + (vec2: Signal[Vec[N]]): Signal[Vec[N]] =
-    Plus(vec1, vec2)
+  def [N <: Num](lhs: Signal[Vec[N]]) + (rhs: Signal[Vec[N]]): Signal[Vec[N]] =
+    Plus(lhs, rhs)
 
-  def [N <: Num](vec1: Signal[Vec[N]]) - (vec2: Signal[Vec[N]]): Signal[Vec[N]] =
-    Minus(vec1, vec2)
+  def [N <: Num](lhs: Signal[Vec[N]]) - (rhs: Signal[Vec[N]]): Signal[Vec[N]] =
+    Minus(lhs, rhs)
 
   def Vec[T <: Num](bit: 1 | 0, bits: (1 | 0)*): Signal[Vec[T]] =
     VecLit[T](bit :: bits.toList)
@@ -365,7 +368,7 @@ object lang {
       if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
-        val padding = 0.toSignal(bitsToShift)
+        val padding = 0.W[bitsToShift.type]
         val shifted: Signal[Vec[N]] =
           if (isLeft) (toShift(bitsToShift, n - 1) ++ padding).as[Vec[N]]
           else (padding ++ toShift(0, n - bitsToShift - 1)).as[Vec[N]]
