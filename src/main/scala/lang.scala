@@ -572,7 +572,7 @@ object lang {
   def show(value: Value[_]): String = value match {
     case PairV(l, r)     => show(l) + " ~ " + show(r)
     case VecV(bits)      =>
-      if (bits.size == 0) bits(0).toString else toHex(bits)
+      if (bits.size <= 4) bits.map(_.toString).mkString else toHex(bits)
   }
 
   def toHex(bits: List[0 | 1]): String = {
@@ -588,13 +588,13 @@ object lang {
       if (base > 8 || count == bits.size) {
         base = 1
 
-        if(sum < 10) sb.append(sum.toString)
-        else if(sum == 10) sb.append("A")
-        else if(sum == 11) sb.append("B")
-        else if(sum == 12) sb.append("C")
-        else if(sum == 13) sb.append("D")
-        else if(sum == 14) sb.append("E")
-        else if(sum == 15) sb.append("F")
+        if(sum < 10) sb.insert(0, sum.toString)
+        else if(sum == 10) sb.insert(0, "A")
+        else if(sum == 11) sb.insert(0, "B")
+        else if(sum == 12) sb.insert(0, "C")
+        else if(sum == 13) sb.insert(0, "D")
+        else if(sum == 14) sb.insert(0, "E")
+        else if(sum == 15) sb.insert(0, "F")
 
         sum = 0
       }
