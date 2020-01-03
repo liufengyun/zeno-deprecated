@@ -533,7 +533,7 @@ object phases {
   }
 
 
-  def verilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
+  def toVerilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
     val normSig = detuple(flatten(lift(sig)))
 
     import scala.collection.mutable.ListBuffer
@@ -562,9 +562,9 @@ object phases {
       clockDecl +
       s"$inputDecls\n" +
       s"$outDecl\n" +
-      wires.mkString + "\n" +
-      regs.mkString + "\n\n" +
-      assigns.mkString + "\n\n" +
+      wires.mkString("\n") + "\n" +
+      regs.mkString("\n") + "\n\n" +
+      assigns.mkString("\n") + "\n\n" +
       s"$body\n" +
       "endmodule\n"
     }
@@ -671,7 +671,7 @@ object phases {
 
       case code => // combinational
         val out = recur(code)
-        assigns += "assign out = $out;"
+        assigns += s"assign out = $out;"
         template("")
     }
   }

@@ -14,7 +14,6 @@ class TestSuite {
   @Test def controller(): Unit = {
     var  success: Boolean = true
 
-
     val path = new java.io.File("asm")
     path.listFiles.filter(f => f.isFile && f.getName.endsWith(".s")).foreach { f =>
       checkResult(Controller.test(f.toString))
@@ -38,6 +37,13 @@ class TestSuite {
 
     // run all tests by default
     assertTrue(success)
+
+    // generate verilog
+
+    val busIn = variable[Controller.BusIn]("busIn")
+    val instructions = Assembler.assemble("asm/jump.s")
+    val code = Controller.processor(instructions, busIn)
+    writeFile("verilog/controller.v", phases.toVerilog("Controller", List(busIn), code))
   }
 
   @Test def adder2(): Unit = {
@@ -45,6 +51,8 @@ class TestSuite {
     val b = variable[Vec[2]]("b")
     val circuit = Adder.adder2(a, b)
     val add2 = phases.interpret(List(a, b), circuit)
+
+    writeFile("verilog/adder.v", phases.toVerilog("Adder", List(a, b), circuit))
 
     {
       val Value(c1, s1, s0) = add2(Value(1, 0) :: Value(0, 1) :: Nil)
@@ -90,6 +98,7 @@ class TestSuite {
     val avg = phases.interpret(List(a), circuit)
 
     // println(show(phases.flatten(phases.lift(circuit))))
+    writeFile("verilog/filter.v", phases.toVerilog("Filter", List(a), circuit))
 
     val o1 = avg(10.toValue(8) :: Nil)
     assertEquals(o1.toInt, 2)
@@ -107,12 +116,22 @@ class TestSuite {
     val circuit = a << b
     val shift = phases.interpret(List(a, b), circuit)
 
-    // println(show(circuit))
+
+    writeFile("verilog/shift.v", phases.toVerilog("Shift", List(a, b), circuit))
 
     val o1 = shift(1.toValue(8) :: 1.toValue(4) :: Nil)
     assertEquals(o1.toInt, 2)
 
     val o2 = shift(2.toValue(8) :: 2.toValue(4) :: Nil)
     assertEquals(o2.toInt, 8)
+  }
+
+  def writeFile(path: String, content: String): Unit = {
+    import java.io.PrintWriter
+
+    new PrintWriter(path) {
+      write(content)
+      close
+    }
   }
 }
