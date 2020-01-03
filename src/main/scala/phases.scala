@@ -653,21 +653,21 @@ object phases {
         assigns += s"assign out = next[$hiOut:0];"
 
         val stateHi = body.width - fsm.width - 1
-        regs += s"reg [$stateHi:0] state;"
+        regs += s"reg [$stateHi:0] ${sym.name};"
 
         val initial = {
           val bin = bits2Verilog(init.asInstanceOf[VecV].bits)
           s"""|initial begin
-              |  state = $bin;
+              |  ${sym.name} = $bin;
               |end\n\n""".stripMargin
         }
 
         val always = {
           s"""|always @ (posedge CLK)
-              |  state <= next[$hi:$lo]\n\n""".stripMargin
+              |  ${sym.name} <= next[$hi:$lo];\n\n""".stripMargin
         }
 
-        template(initial + always)
+        template(initial + always, sequential = true)
 
       case code => // combinational
         val out = recur(code)

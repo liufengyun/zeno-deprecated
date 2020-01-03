@@ -1,4 +1,5 @@
-module Controller ( busIn, out);
+module Controller (CLK,  busIn, out);
+input CLK;
 input [31:0] busIn;
 output [94:0] out;
 wire [3:0] pcNext8;
@@ -6,7 +7,7 @@ wire [15:0] instr8;
 wire [31:0] stage2Acc8;
 wire [146:0] next;
 wire out;
-reg [51:0] state;
+reg [51:0] processor8;
 
 assign pcNext8 = ( processor8[51:48] + 4'b0001 );
 assign instr8 = ( ( processor8[51:48] == 4'b1111 )? 16'b0000000000000000 : ( ( processor8[51:48] == 4'b1110 )? 16'b0000000000000000 : ( ( processor8[51:48] == 4'b1101 )? 16'b0000000000000000 : ( ( processor8[51:48] == 4'b1100 )? 16'b0000000000000000 : ( ( processor8[51:48] == 4'b1011 )? 16'b0000000000000000 : ( ( processor8[51:48] == 4'b1010 )? 16'b0000000000000000 : ( ( processor8[51:48] == 4'b1001 )? 16'b0000000000000000 : ( ( processor8[51:48] == 4'b1000 )? 16'b0001001100000000 : ( ( processor8[51:48] == 4'b0111 )? 16'b0001000000000010 : ( ( processor8[51:48] == 4'b0110 )? 16'b0000001000000001 : ( ( processor8[51:48] == 4'b0101 )? 16'b0000001001111010 : ( ( processor8[51:48] == 4'b0100 )? 16'b0001000100001000 : ( ( processor8[51:48] == 4'b0011 )? 16'b0000010001111010 : ( ( processor8[51:48] == 4'b0010 )? 16'b0000100100000000 : ( ( processor8[51:48] == 4'b0001 )? 16'b0000100001000001 : ( ( processor8[51:48] == 4'b0000 )? 16'b0000000000000000 : 16'b0000000000000000 ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) );
@@ -15,11 +16,11 @@ assign next = ( ( instr8[15:8] == 8'b00000010 )? {{{pcNext8, ( stage2Acc8 + {24'
 assign out = next[94:0];
 
 initial begin
-  state = 52'b0000000000000000000000000000000000000000000000000000;
+  processor8 = 52'b0000000000000000000000000000000000000000000000000000;
 end
 
 always @ (posedge CLK)
-  state <= next[146:95]
+  processor8 <= next[146:95];
 
 
 endmodule

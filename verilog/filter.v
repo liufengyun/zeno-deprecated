@@ -1,4 +1,5 @@
-module Filter ( a, out);
+module Filter (CLK,  a, out);
+input CLK;
 input [7:0] a;
 output [7:0] out;
 wire [7:0] delay;
@@ -12,7 +13,7 @@ wire [15:0] x17;
 wire [7:0] x11;
 wire [23:0] next;
 wire out;
-reg [15:0] state;
+reg [15:0] delay_delay11;
 
 assign delay = delay_delay11[15:8];
 assign delay1 = delay_delay11[7:0];
@@ -27,11 +28,11 @@ assign next = {{x19[15:8], x19[23:16] }, x19[7:0] };
 assign out = next[7:0];
 
 initial begin
-  state = 16'b0000000000000000;
+  delay_delay11 = 16'b0000000000000000;
 end
 
 always @ (posedge CLK)
-  state <= next[23:8]
+  delay_delay11 <= next[23:8];
 
 
 endmodule
