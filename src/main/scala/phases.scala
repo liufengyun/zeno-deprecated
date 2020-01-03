@@ -107,6 +107,11 @@ object phases {
     }
   }
 
+  def fix[T <: AnyRef](v: T)(fn: T => T): T = {
+    val current = fn(v)
+    if (v `ne` current) fix(current)(fn)
+    else current
+  }
 
   def lift[T <: Type](sig: Signal[T]): Signal[T] = {
     val liftMap = new TreeMap {
@@ -196,15 +201,9 @@ object phases {
       }
     }
 
-    var last: Signal[T] = sig
-    var current: Signal[T] = liftMap(sig)
-    while (current `ne` last) {
-      last = current
-      current = liftMap(current)
-    }
-
-    current
+    fix(sig)(liftMap.apply[T])
   }
+
 
   /** Flatten a lifted tree */
   def flatten[T <: Type](tree: Signal[T]): Signal[T] = tree match {
@@ -221,7 +220,122 @@ object phases {
     case _ => tree
   }
 
-  def detuple[T <: Type](sig: Signal[T]): Signal[T] = ???
+  def detuple[T <: Type, U <: Num](sig: Signal[T]): Signal[Vec[U]] = {
+    def toVecType(tp: Type): Vec[_] = tp match {
+      case Pair(lhs, rhs) =>
+        (toVecType(lhs), toVecType(rhs)) match {
+          case (Vec(m), Vec(n)) =>
+            val size = m + n
+            Vec(size)
+        }
+
+      case tp: Vec[_] =>
+        tp
+    }
+
+    def toVecValue(v: Value[_]): VecV[_] = v match {
+      case PairV(lhs, rhs) =>
+        (toVecValue(lhs), toVecValue(rhs)) match {
+          case (VecV(bits1), VecV(bits2)) => VecV(bits1 ++ bits2)
+        }
+
+      case v: VecV[_] =>
+        v
+    }
+
+
+    def recur[T <: Type, U <: Num](sig: Signal[T]): Signal[Vec[U]] = sig match {
+      case Par(lhs, rhs)          =>
+        (recur(lhs) ++ recur(rhs)).as[Vec[U]]
+
+      case Left(pair)             =>
+        val vec = recur(pair)
+        val tp = toVecType(sig.tpe)
+        vec(vec.size - 1, vec.size - tp.size)
+
+      case Right(pair)            =>
+        val vec = recur(pair)
+        val tp = toVecType(sig.tpe)
+        vec(tp.size - 1, 0)
+
+      case At(vec, index)         =>
+        // vec may contain tuples
+        val vec1 = recur(vec)
+        vec1(index).as[Vec[U]]
+
+      case Range(vec, to, from)   =>
+        // vec may contain tuples
+        val vec1 = recur(vec)
+        vec1(to, from).as[Vec[U]]
+
+      case VecLit(_)              =>
+        sig.as[Vec[U]]
+
+      case Var(sym, tpe)          =>
+        Var(sym, toVecType(tpe))
+
+      case Let(sym, sig, body)    =>
+        val sig2 = recur(sig)
+        val body2 = recur(body)
+        Let(sym, sig2, body2.as[Vec[U]])
+
+      case Fsm(sym, init, body)   =>
+        val init2 = toVecValue(init)
+        val body2 = recur(body)
+        Fsm(sym, init2, body2.asInstanceOf)
+
+      case And(lhs, rhs)          =>
+        And(recur(lhs), recur(rhs))
+
+      case Or(lhs, rhs)           =>
+        Or(recur(lhs), recur(rhs))
+
+      case Not(in)                =>
+        Not(recur(in))
+
+      case Concat(lhs, rhs)     =>
+        recur(lhs) ++ recur(rhs)
+
+      case Equals(lhs, rhs)     =>
+        Equals(recur(lhs), recur(rhs)).as[Vec[U]]
+
+      case Plus(lhs, rhs)       =>
+        // x.1 possible in `lhs`
+        Plus(recur(lhs), recur(rhs))
+
+      case Minus(lhs, rhs)      =>
+        // x.1 possible in `lhs`
+        Minus(recur(lhs), recur(rhs))
+
+      case Mux(cond, thenp, elsep)  =>
+        // x.1 possible in `cond`
+        Mux(recur(cond), recur(thenp), recur(elsep))
+
+      case Shift(lhs, rhs, isLeft)   =>
+        // x.1 possible in `lhs`
+        Shift(recur(lhs), recur(rhs), isLeft)
+    }
+
+    val mergeRangeAt = new TreeMap {
+      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+        case Range(Range(vec, hi1, lo1), hi2, lo2) =>
+          val hi = hi2 + lo1
+          val lo = lo2 + lo1
+          Range(vec, hi, lo).as[T]
+
+        case At(Range(vec, hi, lo), index) =>
+          val index2 = index + lo
+          At(vec, index2)
+
+        case _ =>
+          recur(tree)
+      }
+    }
+
+    val sig2 = recur(sig).as[Vec[U]]
+
+    fix(sig2)(mergeRangeAt.apply[Vec[U]])
+  }
 
 
   def interpret[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value[_]] => Value[T] = {
@@ -313,7 +427,7 @@ object phases {
       VecV(res.asInstanceOf[List[0 | 1]])
     }
 
-    def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value[_]]): Value[T] = sig match {
+    def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value[_]]): Value[T] = { /* println(show(sig)); */ sig} match {
       case Par(lhs, rhs)          =>
         recur(lhs) ~ recur(rhs)
 
@@ -389,7 +503,7 @@ object phases {
     }
 
     flatten(lift(body)) match {
-      case Fsm(sym, init, body) =>
+      case fsm @ Fsm(sym, init, body) =>
         var lastState = init
         (vs: List[Value[_]]) => {
           val env = input.map(_.sym).zip(vs).toMap + (sym -> lastState)
@@ -399,6 +513,10 @@ object phases {
               lastState = lhs
               // println("out = " + rhs)
               rhs
+            case vec: VecV[_] =>  // after detupling
+              val sepIndex = fsm.tpe.asInstanceOf[Vec[_]].size
+              lastState = vec(vec.size - 1, sepIndex).asInstanceOf
+              vec(sepIndex - 1, 0).asInstanceOf[Value[T]]
           }
         }
 

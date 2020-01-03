@@ -254,6 +254,62 @@ object Controller {
     sb.toString
   }
 
+  def testDetupled(prog: String): String = {
+    val busIn = variable[BusIn]("busIn")
+    val instructions = Assembler.assemble(prog)
+    val code = processor(instructions, busIn)
+    val detupled = phases.detuple(code)
+    // println(show(detupled))
+    val fsm = phases.interpret(busIn :: Nil, detupled)
+
+    var run = true
+    var maxInstructions = 30000
+    val sb = new StringBuilder
+
+    val memory = scala.collection.mutable.Map.empty[Short, Int]
+
+    var input: Value[BusIn] = 0.toValue(32)
+    while(run) {
+      val output = fsm(input :: Nil).asInstanceOf[VecV[_]]
+      val hi = output.size - 1
+      val addr = output(hi, hi - 7)
+      val read = output(hi - 8)
+      val write = output(hi - 9)
+      val writedata = output(hi - 10, hi - 10 - 31)
+      val exit = output(0)
+
+      // println("size = " + output.size)
+      // println("write = " + write.toInt)
+      // println("writedata = " + writedata.toInt)
+
+      if (write.toInt == 1) {
+        val data = writedata.toInt
+        if (addr.toShort == 0) {
+          val char = data.toChar
+          sb.append(char)
+        }
+        else {
+          memory(addr.toShort) = data
+        }
+      }
+
+      if (read.toInt == 1) {
+        val data = memory.getOrElse(addr.toShort, 0)
+        input = data.toValue(32)
+      }
+
+      // println("pc = " + pc.asInstanceOf[Value[Vec[0]]].toInt)
+      // println("acc = " + acc.toInt)
+
+      // displayPrompt()
+
+      maxInstructions -= 1
+      run = exit.toInt == 0 && maxInstructions > 0
+    }
+
+    sb.toString
+  }
+
   /** Show prompt if `-Xprompt` is passed as a flag to the compiler */
   def displayPrompt(): Unit = {
     println()

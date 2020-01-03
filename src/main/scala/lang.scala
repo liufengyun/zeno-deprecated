@@ -143,7 +143,11 @@ object lang {
   case class Fsm[S <: Type, T <: Type](sym: Symbol, init: Value[S], body: Signal[S ~ T]) extends Signal[T] {
     val tpe: Type = body.tpe match {
       case Pair(t1, t2) => t2
-      case _ => ???  // impossible
+      case Vec(size) =>
+        // after detupling
+        val initV = init.asInstanceOf[VecV[_]]
+        val outSize = size - initV.size
+        Vec(outSize)
     }
   }
 
@@ -323,7 +327,7 @@ object lang {
       bit ++ acc
     }
 
-  def [M <: Num, N <: Num, U <: Num](sig1: Signal[Vec[M]]) ++ (sig2: Signal[Vec[N]]): Signal[Vec[U]] = Concat(sig1, sig2)
+  def [M <: Num, N <: Num, U <: Num](lhs: Signal[Vec[M]]) ++ (rhs: Signal[Vec[N]]): Signal[Vec[U]] = Concat(lhs, rhs)
 
   def [S <: Num](vec: Signal[Vec[S]]) apply(index: Int): Signal[Bit] = At(vec, index)
 
