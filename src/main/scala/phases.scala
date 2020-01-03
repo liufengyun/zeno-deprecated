@@ -209,9 +209,11 @@ object phases {
   def flatten[T <: Type](tree: Signal[T]): Signal[T] = tree match {
     case Fsm(sym1, init1, Fsm(sym2, init2, body2)) =>
       fsm(sym1.name + "_" + sym2.name, init1 ~ init2) { state =>
-        Let(sym1, state.left,
-          Let(sym2, state.right,
-            let("x", body2) { x => (x.right.left ~ x.left) ~ x.right.right }
+        Let(sym1, state.asPair.left,
+          Let(sym2, state.asPair.right,
+            let("x", body2) { x =>
+              ((x.right.left ~ x.left) ~ x.right.right).asInstanceOf
+            }
           )
         )
 
@@ -233,13 +235,13 @@ object phases {
         tp
     }
 
-    def toVecValue(v: Value[_]): VecV[_] = v match {
+    def toVecValue(v: Value): VecV = v match {
       case PairV(lhs, rhs) =>
         (toVecValue(lhs), toVecValue(rhs)) match {
           case (VecV(bits1), VecV(bits2)) => VecV(bits1 ++ bits2)
         }
 
-      case v: VecV[_] =>
+      case v: VecV =>
         v
     }
 
@@ -338,48 +340,48 @@ object phases {
   }
 
 
-  def interpret[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value[_]] => Value[T] = {
-    def and[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = (lhs, rhs) match {
+  def interpret[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value] => Value = {
+    def and(lhs: Value, rhs: Value): Value = (lhs, rhs) match {
       case (lhs1 ~ rhs1, lhs2 ~ rhs2) =>
-        (and(lhs1, lhs2.asInstanceOf) ~ and(rhs1, rhs2.asInstanceOf)).asInstanceOf[Value[T]]
+        (and(lhs1, lhs2) ~ and(rhs1, rhs2))
 
       case (VecV(bits1), VecV(bits2)) if bits1.size == bits2.size =>
-        VecV(bits1.zip(bits2).map { case (a, b) => a & b }.asInstanceOf[List[0 | 1]]).asInstanceOf[Value[T]]
+        VecV(bits1.zip(bits2).map { case (a, b) => a & b }.asInstanceOf[List[0 | 1]])
 
       case _ => ??? // impossible
     }
 
-    def or[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = (lhs, rhs) match {
+    def or(lhs: Value, rhs: Value): Value = (lhs, rhs) match {
       case (lhs1 ~ rhs1, lhs2 ~ rhs2) =>
-        (or(lhs1, lhs2.asInstanceOf) ~ or(rhs1, rhs2.asInstanceOf)).asInstanceOf[Value[T]]
+        (or(lhs1, lhs2) ~ or(rhs1, rhs2))
 
       case (VecV(bits1), VecV(bits2)) if bits1.size == bits2.size =>
-        VecV(bits1.zip(bits2).map { case (a, b) => a | b }.asInstanceOf[List[0 | 1]]).asInstanceOf[Value[T]]
+        VecV(bits1.zip(bits2).map { case (a, b) => a | b }.asInstanceOf[List[0 | 1]])
 
       case _ => ??? // impossible
     }
 
-    def not[T <: Type](in: Value[T]): Value[T] = (in: @unchecked) match {
+    def not(in: Value): Value = (in: @unchecked) match {
       case lhs ~ rhs =>
-        (not(lhs) ~ not(rhs)).asInstanceOf[Value[T]]
+        (not(lhs) ~ not(rhs))
 
       case VecV(bits) =>
-        VecV(bits.map(i => (i - 1).asInstanceOf[0 | 1])).asInstanceOf[Value[T]]
+        VecV(bits.map(i => (i - 1).asInstanceOf[0 | 1]))
     }
 
-    def equals[T <: Type](lhs: Value[T], rhs: Value[T]): Value[Bit] = ((lhs, rhs): @unchecked) match {
+    def equals(lhs: Value, rhs: Value): Value = ((lhs, rhs): @unchecked) match {
       case (lhs1 ~ rhs1, lhs2 ~ rhs2) =>
-        and(equals(lhs1, lhs2.asInstanceOf), equals(rhs1, rhs2.asInstanceOf))
+        and(equals(lhs1, lhs2), equals(rhs1, rhs2))
 
       case (VecV(bits1), VecV(bits2)) if bits1.size == bits2.size =>
         (0 until bits1.size).foldLeft(Bits(1)) { (acc, i) =>
           if (bits1(i) == bits2(i)) acc else Bits(0)
-        }.asInstanceOf[Value[Bit]]
+        }
 
       // case _ => ??? // impossible
     }
 
-    def plus[T <: Num](lhs: VecV[T], rhs: VecV[T]): VecV[T] = {
+    def plus(lhs: VecV, rhs: VecV): VecV = {
       val size = lhs.size
 
       assert(lhs.size == rhs.size, "lhs.size = " + lhs.size + ", rhs.size = " + rhs.size)
@@ -395,7 +397,7 @@ object phases {
       VecV(bits.asInstanceOf[List[1 | 0]])
     }
 
-    def minus[T <: Num](lhs: VecV[T], rhs: VecV[T]): VecV[T] = {
+    def minus(lhs: VecV, rhs: VecV): VecV = {
       val size = lhs.size
 
       assert(lhs.size == rhs.size, "lhs.size = " + lhs.size + ", rhs.size = " + rhs.size)
@@ -411,7 +413,7 @@ object phases {
       VecV(bits.asInstanceOf[List[1 | 0]])
     }
 
-    def shift[T <: Num, S <: Num](lhs: VecV[T], rhs: VecV[S], isLeft: Boolean): VecV[T] = {
+    def shift(lhs: VecV, rhs: VecV, isLeft: Boolean): VecV = {
       val bits: List[Int] = (0 until lhs.size).map(lhs(_)).toList
       val res = (0 until rhs.size).foldLeft(bits) { (acc, i) =>
         val bitsToShift = 1 << i
@@ -427,35 +429,39 @@ object phases {
       VecV(res.asInstanceOf[List[0 | 1]])
     }
 
-    def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value[_]]): Value[T] = { /* println(show(sig)); */ sig} match {
+    def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value]): Value = { /* println(show(sig)); */ sig} match {
       case Par(lhs, rhs)          =>
         recur(lhs) ~ recur(rhs)
 
       case Left(pair)             =>
         recur(pair) match {
           case PairV(lhs, rhs) => lhs
+          case _ => ??? // imposiible
         }
 
       case Right(pair)            =>
         recur(pair) match {
           case PairV(lhs, rhs) => rhs
+          case _ => ??? // imposiible
         }
 
       case At(vec, index)         =>
         recur(vec) match {
-          case vec: VecV[_] => Bits(vec(index)).asInstanceOf[Value[T]]
+          case vec: VecV => Bits(vec(index))
+          case _ => ??? // imposiible
         }
 
       case Range(vec, to, from)   =>
         recur(vec) match {
-          case vec: VecV[_] =>  vec(to, from).asInstanceOf[Value[T]]
+          case vec: VecV =>  vec(to, from)
+          case _ => ??? // imposiible
         }
 
       case VecLit(bits)           =>
-        VecV(bits).asInstanceOf[Value[T]]
+        VecV(bits)
 
       case Var(sym, tpe)          =>
-        env(sym).asInstanceOf[Value[T]]
+        env(sym)
 
       case Let(sym, sig, body)    =>
         val v = recur(sig)
@@ -474,22 +480,22 @@ object phases {
         not(recur(in))
 
       case Concat(lhs, rhs)     =>
-        val lhsV = recur(lhs).asInstanceOf[VecV[_]]
-        val rhsV = recur(rhs).asInstanceOf[VecV[_]]
-        VecV(lhsV.bits ++ rhsV.bits).asInstanceOf[Value[T]]
+        val lhsV = recur(lhs).asInstanceOf[VecV]
+        val rhsV = recur(rhs).asInstanceOf[VecV]
+        VecV(lhsV.bits ++ rhsV.bits)
 
       case Equals(lhs, rhs)     =>
         equals(recur(lhs), recur(rhs))
 
       case Plus(lhs, rhs)       =>
-        val lhsV = recur(lhs)
-        val rhsV = recur(rhs)
-        plus(lhsV.asInstanceOf, rhsV.asInstanceOf).asInstanceOf[Value[T]]
+        val lhsV = recur(lhs).asInstanceOf[VecV]
+        val rhsV = recur(rhs).asInstanceOf[VecV]
+        plus(lhsV, rhsV)
 
       case Minus(lhs, rhs)      =>
-        val lhsV = recur(lhs)
-        val rhsV = recur(rhs)
-        minus(lhsV.asInstanceOf, rhsV.asInstanceOf).asInstanceOf[Value[T]]
+        val lhsV = recur(lhs).asInstanceOf[VecV]
+        val rhsV = recur(rhs).asInstanceOf[VecV]
+        minus(lhsV, rhsV)
 
       case Mux(cond, thenp, elsep)  =>
         val Bits(bitV) = recur(cond)
@@ -497,15 +503,15 @@ object phases {
         else recur(elsep)
 
       case Shift(lhs, rhs, isLeft)   =>
-        val lhsV = recur(lhs)
-        val rhsV = recur(rhs)
-        shift(lhsV.asInstanceOf, rhsV.asInstanceOf, isLeft).asInstanceOf[Value[T]]
+        val lhsV = recur(lhs).asInstanceOf[VecV]
+        val rhsV = recur(rhs).asInstanceOf[VecV]
+        shift(lhsV, rhsV, isLeft)
     }
 
     flatten(lift(body)) match {
       case fsm @ Fsm(sym, init, body) =>
         var lastState = init
-        (vs: List[Value[_]]) => {
+        (vs: List[Value]) => {
           val env = input.map(_.sym).zip(vs).toMap + (sym -> lastState)
           // println(env)
           recur(body)(env) match {
@@ -513,15 +519,15 @@ object phases {
               lastState = lhs
               // println("out = " + rhs)
               rhs
-            case vec: VecV[_] =>  // after detupling
+            case vec: VecV =>  // after detupling
               val sepIndex = fsm.tpe.asInstanceOf[Vec[_]].size
-              lastState = vec(vec.size - 1, sepIndex).asInstanceOf
-              vec(sepIndex - 1, 0).asInstanceOf[Value[T]]
+              lastState = vec(vec.size - 1, sepIndex)
+              vec(sepIndex - 1, 0)
           }
         }
 
       case code => // combinational
-        (vs: List[Value[_]]) => recur(code)(input.map(_.sym).zip(vs).toMap)
+        (vs: List[Value]) => recur(code)(input.map(_.sym).zip(vs).toMap)
     }
 
   }

@@ -23,36 +23,39 @@ object lang {
 
   // ---------------- values of signal --------------------
 
-  sealed abstract class Value[T <: Type]
+  sealed abstract class Value
 
-  case class PairV[S <: Type, T <: Type](lhs: Value[S], rhs: Value[T]) extends Value[S ~ T]
+  case class PairV(lhs: Value, rhs: Value) extends Value
 
-  case class VecV[T <: Num](bits: List[0 | 1]) extends Value[Vec[T]] {
+  case class VecV(bits: List[0 | 1]) extends Value {
     // bits are stored in reverse order
     def apply(i: Int): 0 | 1 = bits(size - i - 1)
     def size: Int = bits.size
-    def apply[U <: Num](to: Int, from: Int): VecV[U] =
-      VecV[U](bits.dropRight(from).drop(bits.size - to - 1))
+    def apply(to: Int, from: Int): VecV =
+      VecV(bits.dropRight(from).drop(bits.size - to - 1))
   }
 
   object Bits {
-    def apply(bit: 0 | 1, bits: (0 | 1)*): Value[Vec[_]] =
-      new VecV(bit :: bits.toList).asInstanceOf[Value[Vec[_]]]
+    def apply(bit: 0 | 1, bits: (0 | 1)*): Value =
+      new VecV(bit :: bits.toList)
 
-    def unapplySeq[T <: Type](value: Value[T]): Option[List[0 | 1]] = value match {
+    def unapplySeq[T <: Type](value: Value): Option[List[0 | 1]] = value match {
       case VecV(bits) => Some(bits)
       case _ => None
     }
   }
 
-  def [T <: Num](vec: Value[Vec[T]]) toInt: Int = vec match {
-    case vec: VecV[_] =>
+  def (vec: Value) toInt: Int = vec match {
+    case vec: VecV =>
       (0 until vec.size).foldLeft(0) { (acc, i) => acc | ((vec(i) & 1) << i) }
+
+    case _ =>
+      throw new Exception("Cannot call .toInt on pairs")
   }
 
-  def [T <: Num](value: Value[Vec[T]]) toShort: Short = value.toInt.toShort
+  def [T <: Num](value: Value) toShort: Short = value.toInt.toShort
 
-  def [T <: Num](value: Value[Vec[T]]) toChar: Int = value.toInt.toChar
+  def [T <: Num](value: Value) toChar: Int = value.toInt.toChar
 
   // ---------------- abstract syntax trees --------------------
 
@@ -83,9 +86,14 @@ object lang {
     def ~[U <: Type](rhs: Signal[U]): Signal[T ~ U] = Par(this, rhs)
 
     def as[S <: Type]: Signal[S] = {
-      // TODO: add dynamic check
       this.asInstanceOf[Signal[S]]
     }
+
+    def asPair[S <: Type, U <: Type]: Signal[S ~ U] = {
+      // TODO: add dynamic check
+      this.as[S ~ U]
+    }
+
 
     def tpe: Type
   }
@@ -140,12 +148,12 @@ object lang {
     val tpe: Type = body.tpe
   }
 
-  case class Fsm[S <: Type, T <: Type](sym: Symbol, init: Value[S], body: Signal[S ~ T]) extends Signal[T] {
+  case class Fsm[S <: Type, T <: Type](sym: Symbol, init: Value, body: Signal[S ~ T]) extends Signal[T] {
     val tpe: Type = body.tpe match {
       case Pair(t1, t2) => t2
       case Vec(size) =>
         // after detupling
-        val initV = init.asInstanceOf[VecV[_]]
+        val initV = init.asInstanceOf[VecV]
         val outSize = size - initV.size
         Vec(outSize)
     }
@@ -216,11 +224,13 @@ object lang {
       Vec(size).asInstanceOf
   }
 
-  def typeOf[T <: Type](value: Value[T]): T = value match {
-    case PairV(l, r)  => new ~(typeOf(l), typeOf(r))
+  def typeOf(value: Value): Type = value match {
+    case PairV(l, r)  =>
+      new ~(typeOf(l), typeOf(r))
+
     case VecV(bits)   =>
       val size = bits.size
-      Vec(size).asInstanceOf[T]
+      Vec(size)
   }
 
   // ---------------- constructors --------------------
@@ -241,19 +251,26 @@ object lang {
     def unapply[S <: Type, T <: Type](sig: Signal[S ~ T]): (Signal[S], Signal[T]) =
       (sig.left, sig.right)
 
-    def unapply[S <: Type, T <: Type](value: Value[S ~ T]): (Value[S], Value[T]) = value match {
-      case PairV(lhs, rhs) => (lhs, rhs)
-    }
-
-    def unapply[T <: Type](value: Value[T]): Option[(Value[_], Value[_])] = value match {
+    def unapply(value: Value): Option[(Value, Value)] = value match {
       case PairV(lhs, rhs) => Some((lhs, rhs))
       case _ => None
     }
   }
 
-  def fsm[S <: Type, T <: Type](name: String, init: Value[S])(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
+  def fsm[S <: Type, T <: Type](name: String, init: Value)(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
+    val tpInit = typeOf(init)
     val sym = Symbol.fresh(name)
-    Fsm(sym, init, next(Var(sym, typeOf(init))))
+    val body = next(Var(sym, tpInit))
+
+    body.tpe match {
+      case Pair(s, t) =>
+        if (s != tpInit) throw new Exception("incorrect type of FSM body. Expected = " + tpInit + ", found = " + s)
+
+      case tp =>
+        throw new Exception("unexpected type of FSM body. Pair type expected " + ", found = " + tp)
+    }
+
+    Fsm(sym, init, body)
   }
 
   def mux[T <: Type](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = Mux(cond, x, y)
@@ -266,8 +283,10 @@ object lang {
 
   def [T <: Type](lhs: Signal[T]) ^ (rhs: Signal[T]): Signal[T] = Or(And(lhs, !rhs), And(!lhs, rhs))
 
-  def [T <: Type](value: Value[T]) toSignal: Signal[T] = value match {
-    case PairV(l, r)   => (l.toSignal ~ r.toSignal).asInstanceOf
+  def [T <: Type](value: Value) toSignal: Signal[T] = value match {
+    case PairV(l, r) =>
+      (l.toSignal ~ r.toSignal).asInstanceOf
+
     case VecV(bits)  =>
       VecLit(bits).asInstanceOf
   }
@@ -275,7 +294,7 @@ object lang {
   inline def variable[T <: Type](name: String): Var[T] =
     Var(Symbol(name), typeOf[T])
 
-  def [S <: Type, T <: Type](lhs: Value[S]) ~ (rhs: Value[T]): Value[S ~ T] =
+  def (lhs: Value) ~ (rhs: Value): Value =
     new PairV(lhs, rhs)
 
   // Boolean -> Bits
@@ -284,7 +303,7 @@ object lang {
   implicit val lit0: Conversion[0, Signal[Bit]] = zero => Vec(0)
 
   /** Int -> Bits */
-  def (n: Int) toValue(N: Int): Value[Vec[N.type]] = {
+  def (n: Int) toValue(N: Int): Value = {
     assert(N > 0 && N <= 32, "N = " + N + ", expect N > 0 && N <= 32")
     assert(n >= 0, "n = " + n + ", expect n > 0") // TODO: no negative numbers for now
 
@@ -293,7 +312,7 @@ object lang {
       bit :: acc
     }
 
-    VecV(bits).asInstanceOf[Value[Vec[N.type]]]
+    VecV(bits)
   }
 
   /** Int -> Bits, take the least significant N bits */
@@ -573,7 +592,7 @@ object lang {
     case Vec(size)    => "Vec[" + size + "]"
   }
 
-  def show(value: Value[_]): String = value match {
+  def show(value: Value): String = value match {
     case PairV(l, r)     => show(l) + " ~ " + show(r)
     case VecV(bits)      =>
       if (bits.size <= 4) bits.map(_.toString).mkString else toHex(bits)

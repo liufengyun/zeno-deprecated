@@ -89,9 +89,9 @@ object Controller {
     val addrWidth = addrW
     type PC  = Vec[addrWidth.type]
 
-    val pcInit: Value[PC]      = 0.toValue(addrWidth)
-    val accInit: Value[ACC]    = 0.toValue(32)
-    val lastInit: Value[INSTR] = 0.toValue(16)
+    val pcInit: Value   = 0.toValue(addrWidth)
+    val accInit: Value  = 0.toValue(32)
+    val lastInit: Value = 0.toValue(16)
 
     val defaultBusOut: Signal[BusOut] = 0.toSignal(8) ~ 0 ~ 0 ~ 0.toSignal(32)
 
@@ -222,7 +222,7 @@ object Controller {
 
     val memory = scala.collection.mutable.Map.empty[Short, Int]
 
-    var input: Value[BusIn] = 0.toValue(32)
+    var input: Value = 0.toValue(32)
     while(run) {
       val (addr ~ read ~ write ~ writedata) ~ (acc ~ pc ~ instr ~ exit) = fsm(input :: Nil)
 
@@ -242,7 +242,7 @@ object Controller {
         input = data.toValue(32)
       }
 
-      // println("pc = " + pc.asInstanceOf[Value[Vec[0]]].toInt)
+      // println("pc = " + pc.toInt)
       // println("acc = " + acc.toInt)
 
       // displayPrompt()
@@ -268,9 +268,9 @@ object Controller {
 
     val memory = scala.collection.mutable.Map.empty[Short, Int]
 
-    var input: Value[BusIn] = 0.toValue(32)
+    var input: Value = 0.toValue(32)
     while(run) {
-      val output = fsm(input :: Nil).asInstanceOf[VecV[_]]
+      val output = fsm(input :: Nil).asInstanceOf[VecV]
       val hi = output.size - 1
       val addr = output(hi, hi - 7)
       val read = output(hi - 8)
