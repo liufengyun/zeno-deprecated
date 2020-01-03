@@ -65,9 +65,9 @@ object Controller {
     val opcode  = instr(15, 8).as[Vec[8]]
 
     when (opcode === ADD.W[8]) {
-      (acc + busIn).as[ACC]
+      acc + busIn
     } .when (opcode === SUB.W[8]) {
-      (acc - busIn).as[ACC]
+      acc - busIn
     } .when (opcode === LD.W[8]) {
       busIn
     } .when (opcode === AND.W[8]) {
@@ -98,7 +98,7 @@ object Controller {
     fsm("processor", pcInit ~ accInit ~ lastInit) { (state: Signal[PC ~ ACC ~ INSTR]) =>
       val pc ~ acc ~ lastInstr = state
 
-      let("pcNext", (pc + 1.W[addrWidth.type]).as[PC]) { pcNext =>
+      let("pcNext", pc + 1.W[addrWidth.type]) { pcNext =>
 
         let("instr", instrMemory(addrWidth, prog, pc)) { instr =>
           val operand = (0.W[24] ++ instr(7, 0)).as[Vec[32]]
@@ -125,11 +125,11 @@ object Controller {
             }
 
             when (opcode === ADDI.W[8]) {
-              val acc2 = (acc + operand).as[ACC]
+              val acc2 = acc + operand
               next(acc = acc2)
 
             } .when (opcode === SUBI.W[8]) {
-              val acc2 = (acc - operand).as[ACC]
+              val acc2 = acc - operand
               next(acc = acc2)
 
             } .when (opcode === LDI.W[8]) {
@@ -152,11 +152,11 @@ object Controller {
               next(acc = acc2)
 
             } .when (opcode === SHL.W[8]) {
-              val acc2 = (acc << shiftOperand).as[ACC]
+              val acc2 = acc << shiftOperand
               next(acc = acc2)
 
             } .when (opcode === SHR.W[8]) {
-              val acc2 = (acc >> shiftOperand).as[ACC]
+              val acc2 = acc >> shiftOperand
               next(acc = acc2)
 
             } .when (opcode === BR.W[8]) {
