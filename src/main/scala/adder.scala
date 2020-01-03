@@ -4,7 +4,7 @@ import lang._
 
 import scala.language.implicitConversions
 
-object examples {
+object Adder {
   def halfAdder(a: Signal[Bit], b: Signal[Bit]): Signal[Vec[2]] = {
     val s = a ^ b
     val c = a & b

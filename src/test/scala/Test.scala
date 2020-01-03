@@ -39,7 +39,7 @@ class TestSuite {
   @Test def adder2(): Unit = {
     val a = variable[Vec[2]]("a")
     val b = variable[Vec[2]]("b")
-    val circuit = examples.adder2(a, b)
+    val circuit = Adder.adder2(a, b)
     val add2 = phases.interpret(List(a, b), circuit)
 
     {
@@ -60,7 +60,7 @@ class TestSuite {
   @Test def adderN(): Unit = {
     val a = variable[Vec[3]]("a")
     val b = variable[Vec[3]]("b")
-    val circuit = examples.adderN(a, b)
+    val circuit = Adder.adderN(a, b)
     val add3 = phases.interpret(List(a, b), circuit)
 
     {

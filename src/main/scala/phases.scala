@@ -232,7 +232,7 @@ object phases {
       case (VecV(bits1), VecV(bits2)) if bits1.size == bits2.size =>
         VecV(bits1.zip(bits2).map { case (a, b) => a & b }.asInstanceOf[List[0 | 1]]).asInstanceOf[Value[T]]
 
-      // case _ => ??? // impossible
+      case _ => ??? // impossible
     }
 
     def or[T <: Type](lhs: Value[T], rhs: Value[T]): Value[T] = (lhs, rhs) match {
