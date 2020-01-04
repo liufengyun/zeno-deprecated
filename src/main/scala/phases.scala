@@ -318,12 +318,45 @@ object phases {
         Shift(recur(lhs), recur(rhs), isLeft)
     }
 
-    val mergeRangeAt = new TreeMap {
+    recur(sig).as[Vec[U]]
+  }
+
+  /** Optimize range and index operation that follows concatenation
+   *
+   *  (vec10 ++ vec5)[3]     ~~>     vec10[3]
+   *  (vec5 ++ vec4)[6..3]   ~~>     vec5[2:0] ++ vec4[3]
+   *  vec[6..6]              ~~>     vec[6]
+   *  vec[6..3][3..2]        ~~>     vec[6..5]
+   *  vec[6..3][2]           ~~>     vec[5]
+   */
+  def optsel[T <: Type](sig: Signal[T]): Signal[T] = {
+    val rangeOptMap = new TreeMap {
       def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+        case At(Concat(lhs, rhs), index) =>
+          if (index < rhs.width) At(rhs, index)
+          else At(rhs, index - rhs.width)
+
+        case At(vec, 0) if vec.width == 1 =>
+          vec.as[T]
+
+        case Range(Concat(lhs, rhs), hi, lo) =>
+          val rhsWdith = rhs.width
+          if (hi < rhsWdith && lo < rhsWdith) Range(rhs, hi, lo).as[T]
+          else if (hi >= rhsWdith && lo >= rhsWdith) Range(lhs, hi - rhsWdith, lo - rhsWdith).as[T]
+          else if (hi >= rhsWdith && lo < rhsWdith) {
+            Range(lhs, hi - rhsWdith, 0) ++ Range(rhs, rhsWdith - 1, lo)
+          }.as[T]
+          else ??? // impossible
+
         case Range(Range(vec, hi1, lo1), hi2, lo2) =>
           val hi = hi2 + lo1
           val lo = lo2 + lo1
           Range(vec, hi, lo).as[T]
+
+        case Range(vec, hi, lo) =>
+          if (hi == lo) At(vec, hi).as[T]
+          else if (lo == 0 && hi == vec.width - 1) vec.as[T]
+          else tree
 
         case At(Range(vec, hi, lo), index) =>
           val index2 = index + lo
@@ -334,11 +367,8 @@ object phases {
       }
     }
 
-    val sig2 = recur(sig).as[Vec[U]]
-
-    fix(sig2)(mergeRangeAt.apply[Vec[U]])
+    fix(sig)(rangeOptMap.apply[T])
   }
-
 
   def interpret[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value] => Value = {
     def and(lhs: Value, rhs: Value): Value = (lhs, rhs) match {
@@ -534,7 +564,7 @@ object phases {
 
 
   def toVerilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
-    val normSig = detuple(flatten(lift(sig)))
+    val normailized = optsel(detuple(flatten(lift(sig))))
 
     import scala.collection.mutable.ListBuffer
 
@@ -550,7 +580,7 @@ object phases {
       }.mkString("\n")
 
       val outDecl = {
-        val hi = normSig.width - 1
+        val hi = normailized.width - 1
         wires += s"wire [$hi:0] out;"
         s"output [$hi:0] out;"
       }
@@ -641,7 +671,7 @@ object phases {
     }
 
 
-    normSig match {
+    normailized match {
       case fsm @ Fsm(sym, init, body) =>
         val hi = body.width - 1
         val lo = fsm.width
