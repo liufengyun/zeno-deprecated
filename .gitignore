@@ -50,3 +50,7 @@ classes/
 
 *.out
 _site/
+
+chisel/MovingAverage3.anno.json
+chisel/MovingAverage3.fir
+chisel/MovingAverage3.v
