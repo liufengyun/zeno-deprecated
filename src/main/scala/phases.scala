@@ -551,9 +551,9 @@ object phases {
 
       val outDecl = {
         val hi = normSig.width - 1
+        wires += s"wire [$hi:0] out;"
         s"output [$hi:0] out;"
       }
-      wires += "wire out;"
 
       val clockPort = if (sequential) "CLK, " else ""
       val clockDecl = if (sequential) "input CLK;\n" else ""

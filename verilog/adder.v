@@ -8,7 +8,7 @@ wire [1:0] x1;
 wire [1:0] x5;
 wire [1:0] x3;
 wire [1:0] x4;
-wire out;
+wire [2:0] out;
 
 
 assign x = {( a[0] & b[0] ), ( ( a[0] & ~b[0] ) | ( ~a[0] & b[0] ) ) };

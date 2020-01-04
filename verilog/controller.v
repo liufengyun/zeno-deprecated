@@ -6,7 +6,7 @@ wire [3:0] pcNext8;
 wire [15:0] instr8;
 wire [31:0] stage2Acc8;
 wire [146:0] next;
-wire out;
+wire [94:0] out;
 reg [51:0] processor8;
 
 assign pcNext8 = ( processor8[51:48] + 4'b0001 );

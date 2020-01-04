@@ -12,7 +12,7 @@ wire [15:0] x18;
 wire [15:0] x17;
 wire [7:0] x11;
 wire [23:0] next;
-wire out;
+wire [7:0] out;
 reg [15:0] delay_delay11;
 
 assign delay = delay_delay11[15:8];
