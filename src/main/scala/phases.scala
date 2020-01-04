@@ -205,13 +205,18 @@ object phases {
   }
 
 
-  /** Flatten a lifted tree */
+  /** Flatten a lifted tree
+   *
+   *  It must happen before detupling.
+   */
   def flatten[T <: Type](tree: Signal[T]): Signal[T] = tree match {
-    case Fsm(sym1, init1, Fsm(sym2, init2, body2)) =>
+    case Fsm(sym1, init1, fsm2 @ Fsm(_, _, _)) =>
+      val fsm2a @ Fsm(sym2, init2, body2) = flatten(fsm2)
+
       fsm(sym1.name + "_" + sym2.name, init1 ~ init2) { (state: Signal[T]) =>
         Let(sym1, state.asPair.left,
           Let(sym2, state.asPair.right,
-            let("x", body2) { x =>
+            let("x", body2.as[T ~ (T ~ T)]) { x =>
               ((x.right.left ~ x.left) ~ x.right.right).as[T ~ T]
             }
           )
