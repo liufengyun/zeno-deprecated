@@ -41,19 +41,14 @@ object Adder {
     // }
   }
 
-  def adderN[N <: Num](vec1: Signal[Vec[N]], vec2: Signal[Vec[N]]): Signal[Bit ~ Vec[N]] = {
-    val n: Int = vec1.size
+  def adderN[N <: Num](lhs: Signal[Vec[N]], rhs: Signal[Vec[N]]): Signal[Bit ~ Vec[N]] = {
+    val n: Int = lhs.size
 
-    // index starts from least significant bit
     def recur(index: Int, cin: Signal[Bit], acc: Signal[Vec[_]]): Signal[Bit ~ Vec[N]] =
       if (index >= n) cin ~ acc.as[Vec[N]]
       else {
-        val a: Signal[Bit] = vec1(index).as[Bit]
-        val b: Signal[Bit] = vec2(index).as[Bit]
-        val s: Signal[Bit] = a ^ b ^ cin
-        let((a & b ) | (cin & (a ^ b))) { cout =>
-          recur(index + 1, cout, (s ++ acc.as[Vec[N]]).asInstanceOf)
-        }
+        val cs: Signal[Vec[2]] = fullAdder(lhs(index), rhs(index), cin)
+        recur(index + 1, cs(1), (cs(0) ++ acc.as[Vec[N]]).asInstanceOf)
       }
 
     recur(0, lit(false), Vec().as[Vec[_]])
