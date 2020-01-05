@@ -107,6 +107,67 @@ object phases {
     }
   }
 
+  abstract class TreeAccumulator[X] {
+    def apply[T <: Type](x: X, sig: Signal[T]): X
+
+    def recur[T <: Type](x: X, tree: Signal[T]): X = tree match {
+      case Par(lhs, rhs)          =>
+        this(this(x, lhs), rhs)
+
+      case Left(pair)             =>
+        this(x, pair)
+
+      case Right(pair)            =>
+        this(x, pair)
+
+      case At(vec, index)         =>
+        this(x, vec)
+
+      case Range(vec, to, from)   =>
+        this(x, vec)
+
+      case VecLit(bits)           =>
+        x
+
+      case Var(sym, tpe)          =>
+        x
+
+      case Let(sym, sig, body)    =>
+        this(this(x, sig), body)
+
+      case Fsm(sym, init, body)   =>
+        this(x, body)
+
+      case And(lhs, rhs)          =>
+        this(this(x, lhs), rhs)
+
+      case Or(lhs, rhs)           =>
+        this(this(x, lhs), rhs)
+
+      case Not(in)                =>
+        this(x, in)
+
+      case Concat(lhs, rhs)     =>
+        this(this(x, lhs), rhs)
+
+      case Equals(lhs, rhs)     =>
+        this(this(x, lhs), rhs)
+
+      case Plus(lhs, rhs)       =>
+        this(this(x, lhs), rhs)
+
+      case Minus(lhs, rhs)      =>
+        this(this(x, lhs), rhs)
+
+      case Mux(cond, thenp, elsep)  =>
+        this(this(this(x, cond), thenp), elsep)
+
+      case Shift(lhs, rhs, isLeft)   =>
+        this(this(x, lhs), rhs)
+    }
+  }
+
+
   def fix[T <: AnyRef](v: T)(fn: T => T): T = {
     val current = fn(v)
     if (v `ne` current) fix(current)(fn)
@@ -323,7 +384,7 @@ object phases {
         Shift(recur(lhs), recur(rhs), isLeft)
     }
 
-    recur(sig).as[Vec[U]]
+    optsel(recur(sig).as[Vec[U]])
   }
 
   /** Optimize range and index operation that follows concatenation
@@ -382,9 +443,14 @@ object phases {
   def anf[T <: Type](sig: Signal[T]): Signal[T] = {
     def anfize[S <: Type, T <: Type](sig: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
       sig match {
-        case x: Var[_] => cont(x)
-        case Let(sym, sig2, body) => Let(sym, sig2, cont(body))
-        case _ => let(sig)(cont)
+        case Var(_, _) | At(_, _) | Range(_, _, _) | Concat(_, _) | Left(_) | Right(_) | Par(_, _) | VecLit(_) =>
+          cont(sig)
+
+        case Let(sym, sig2, body) =>
+          Let(sym, sig2, cont(body))
+
+        case _ =>
+          let(sig)(cont)
       }
 
     val anfMap = new TreeMap {
@@ -429,8 +495,8 @@ object phases {
 
         case Let(sym, sig, body)    =>
           sig match {
-            case Let(sym, sig2, body2) =>
-              Let(sym, sig2, Let(sym, body2, body))
+            case Let(sym2, sig2, body2) =>
+              Let(sym2, sig2, Let(sym, body2, body))
             case _ =>  recur(tree)
           }
 
@@ -514,6 +580,79 @@ object phases {
     }
 
     fix(sig)(anfMap.apply[T])
+  }
+
+  /** Inlining
+   *
+   *  Precondition: tree must be ANF
+   */
+  def inlining[T <: Type](sig: Signal[T]): Signal[T] = {
+    def usageCount[T <: Type](sym: Symbol, tree: Signal[T]): Int = {
+      val counter = new TreeAccumulator[Int] {
+        def apply[T  <: Type](x: Int, tree: Signal[T]): Int = tree match {
+          case Var(sym1, _) if sym.eq(sym1) => x + 1
+          case _ => recur(x, tree)
+        }
+      }
+      counter(0, tree)
+    }
+
+    val inliningMap = new TreeMap {
+      import scala.collection.mutable.Map
+      val map: Map[Symbol, Signal[_]] = Map.empty
+
+      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+        case Let(sym, rhs @ Var(_, _), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs @ Concat(_, _), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs @ At(_, _), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs @ Range(_, _, _), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs @ Left(_), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs @ Right(_), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs @ Par(_, _), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs @ VecLit(_), body) =>
+          map(sym) = rhs
+          recur(body)
+
+        case Let(sym, rhs, body) =>
+          val count = usageCount(sym, body)
+          if (count == 0) recur(body) // dead code elimination
+          else if (count == 1) {
+            map(sym) = rhs
+            recur(body)
+          }
+          else recur(tree)
+
+        case Var(sym, tpe) =>
+          if (map.contains(sym)) map(sym).as[T]
+          else tree
+
+        case _ =>
+          recur(tree)
+      }
+    }
+
+    fix(sig)(inliningMap.apply[T])
   }
 
   def interpret[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value] => Value = {
@@ -710,7 +849,7 @@ object phases {
 
 
   def toVerilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
-    val normailized = optsel(detuple(flatten(lift(sig))))
+    val normailized = detuple(flatten(lift(sig)))
 
     import scala.collection.mutable.ListBuffer
 

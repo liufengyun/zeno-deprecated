@@ -98,8 +98,22 @@ class TestSuite {
     val circuit = Filter.movingAverage(a)
     val avg = interpret(List(a), circuit)
 
-    // println(show(phases.flatten(phases.lift(circuit))))
-    writeFile("verilog/filter.v", phases.toVerilog("Filter", List(a), circuit))
+    // println(show(circuit))
+    // def println(msg: String) = ()
+
+    // println(show(circuit))
+    // println(show(lift(circuit)))
+    // println(show(anf(lift(circuit))))
+    // println(show(inlining(anf(lift(circuit)))))
+    // println(show(inlining(anf(flatten(lift(circuit))))))
+
+    val opt = show(detuple(inlining(anf(flatten(lift(circuit))))))
+    // println(opt)
+
+    // writeFile("check/filter.check", opt)
+    checkFile("check/filter.check", opt)
+
+    writeFile("verilog/filter.v", toVerilog("Filter", List(a), circuit))
 
     val o1 = avg(10.toValue(8) :: Nil)
     assertEquals(o1.toInt, 2)
@@ -125,6 +139,13 @@ class TestSuite {
 
     val o2 = shift(2.toValue(8) :: 2.toValue(4) :: Nil)
     assertEquals(o2.toInt, 8)
+  }
+
+  def checkFile(path: String, expect: String): Unit = {
+    import scala.io.Source
+    val source = Source.fromFile(path)
+    val content = source.getLines.mkString("\n")
+    assertEquals(expect, content)
   }
 
   def writeFile(path: String, content: String): Unit = {
