@@ -1,7 +1,7 @@
 
   fsm { 0000 | delay_delay11 => 
     
-      let x10: Vec[8] = delay_delay11(7..0) + delay_delay11(15..8) << 1 + a >> 10
+      let x835: Vec[8] = delay_delay11(7..0) + delay_delay11(15..8) << 1 + a >> 10
       in
-      a ++ delay_delay11(15..8) ++ x10
+      a ++ delay_delay11(15..8) ++ x835
   }

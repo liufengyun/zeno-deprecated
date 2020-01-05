@@ -99,9 +99,6 @@ class TestSuite {
     val avg = interpret(List(a), circuit)
 
     // println(show(circuit))
-    // def println(msg: String) = ()
-
-    // println(show(circuit))
     // println(show(lift(circuit)))
     // println(show(anf(lift(circuit))))
     // println(show(inlining(anf(lift(circuit)))))

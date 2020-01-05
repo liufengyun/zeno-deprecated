@@ -849,7 +849,7 @@ object phases {
 
 
   def toVerilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
-    val normailized = detuple(flatten(lift(sig)))
+    val normailized = detuple(inlining(anf(flatten(lift(sig)))))
 
     import scala.collection.mutable.ListBuffer
 
