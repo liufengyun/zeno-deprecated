@@ -89,14 +89,14 @@ object Controller {
     val addrWidth = addrW
     type PC  = Vec[addrWidth.type]
 
-    val pcInit: Value   = 0.toValue(addrWidth)
-    val accInit: Value  = 0.toValue(32)
-    val lastInit: Value = 0.toValue(16)
+    val pc0: Value   = 0.toValue(addrWidth)
+    val acc0: Value  = 0.toValue(32)
+    val pending0: Value = 0.toValue(16)
 
     val defaultBusOut: Signal[BusOut] = 0.W[8] ~ 0 ~ 0 ~ 0.W[32]
 
-    fsm("processor", pcInit ~ accInit ~ lastInit) { (state: Signal[PC ~ ACC ~ INSTR]) =>
-      val pc ~ acc ~ lastInstr = state
+    fsm("processor", pc0 ~ acc0 ~ pending0) { (state: Signal[PC ~ ACC ~ INSTR]) =>
+      val pc ~ acc ~ pendingInstr = state
 
       let("pcNext", pc + 1.W[addrWidth.type]) { pcNext =>
 
@@ -111,7 +111,7 @@ object Controller {
           val loadBusOut: Signal[BusOut] = busAddr ~ 1 ~ 0 ~ 0.W[32]
 
           // forward acc from stage 2
-          let("stage2Acc", stage2(lastInstr, acc, busIn)) { acc =>
+          let("stage2Acc", stage2(pendingInstr, acc, busIn)) { acc =>
 
             def next(
               pc: Signal[PC] = pcNext,

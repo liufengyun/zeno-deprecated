@@ -168,6 +168,7 @@ object lang {
     }
   }
 
+  // TODO: restrict to vec types
   case class And[T <: Type](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
     assert(lhs.tpe == rhs.tpe, "lhs.tpe = " + lhs.tpe + ", rhs.tpe = " + rhs.tpe)
     val tpe: Type = lhs.tpe

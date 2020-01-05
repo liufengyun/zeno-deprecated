@@ -8,6 +8,7 @@ import java.nio.file.{Files, Paths, FileSystems, Path}
 import java.io.File
 
 import lang._
+import phases._
 
 import scala.language.implicitConversions
 class TestSuite {
@@ -43,16 +44,16 @@ class TestSuite {
     val busIn = variable[Controller.BusIn]("busIn")
     val instructions = Assembler.assemble("asm/jump.s")
     val code = Controller.processor(instructions, busIn)
-    writeFile("verilog/controller.v", phases.toVerilog("Controller", List(busIn), code))
+    writeFile("verilog/controller.v", toVerilog("Controller", List(busIn), code))
   }
 
   @Test def adder2(): Unit = {
     val a = variable[Vec[2]]("a")
     val b = variable[Vec[2]]("b")
     val circuit = Adder.adder2(a, b)
-    val add2 = phases.interpret(List(a, b), circuit)
+    val add2 = interpret(List(a, b), circuit)
 
-    writeFile("verilog/adder.v", phases.toVerilog("Adder", List(a, b), circuit))
+    writeFile("verilog/adder.v", toVerilog("Adder", List(a, b), circuit))
 
     {
       val Value(c1, s1, s0) = add2(Value(1, 0) :: Value(0, 1) :: Nil)
@@ -73,7 +74,7 @@ class TestSuite {
     val a = variable[Vec[3]]("a")
     val b = variable[Vec[3]]("b")
     val circuit = Adder.adderN(a, b)
-    val add3 = phases.interpret(List(a, b), circuit)
+    val add3 = interpret(List(a, b), circuit)
 
     {
       val Value(c2) ~ Value(s2, s1, s0) = add3(Value(1, 0, 1) :: Value(0, 1, 0) :: Nil)
@@ -95,7 +96,7 @@ class TestSuite {
   @Test def filter(): Unit = {
     val a = variable[Vec[8]]("a")
     val circuit = Filter.movingAverage(a)
-    val avg = phases.interpret(List(a), circuit)
+    val avg = interpret(List(a), circuit)
 
     // println(show(phases.flatten(phases.lift(circuit))))
     writeFile("verilog/filter.v", phases.toVerilog("Filter", List(a), circuit))
@@ -114,10 +115,10 @@ class TestSuite {
     val a = variable[Vec[8]]("a")
     val b = variable[Vec[4]]("b")
     val circuit = a << b
-    val shift = phases.interpret(List(a, b), circuit)
+    val shift = interpret(List(a, b), circuit)
 
 
-    writeFile("verilog/shift.v", phases.toVerilog("Shift", List(a, b), circuit))
+    writeFile("verilog/shift.v", toVerilog("Shift", List(a, b), circuit))
 
     val o1 = shift(1.toValue(8) :: 1.toValue(4) :: Nil)
     assertEquals(o1.toInt, 2)

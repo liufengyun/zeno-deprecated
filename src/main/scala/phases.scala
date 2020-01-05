@@ -375,6 +375,147 @@ object phases {
     fix(sig)(rangeOptMap.apply[T])
   }
 
+  /** A Normal Form
+   *
+   *  Precondition: all FSMs must be lifted
+   */
+  def anf[T <: Type](sig: Signal[T]): Signal[T] = {
+    def anfize[S <: Type, T <: Type](sig: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
+      sig match {
+        case x: Var[_] => cont(x)
+        case Let(sym, sig2, body) => Let(sym, sig2, cont(body))
+        case _ => let(sig)(cont)
+      }
+
+    val anfMap = new TreeMap {
+      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+        case Par(lhs, rhs)          =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else Par(lhs2, rhs2)
+            }
+          }
+
+        case Left(pair)             =>
+          anfize(pair) { pair2 =>
+            if (pair.eq(pair2)) recur(tree)
+            else Left(pair2)
+          }
+
+        case Right(pair)            =>
+          anfize(pair) { pair2 =>
+            if (pair.eq(pair2)) recur(tree)
+            else Right(pair2)
+          }
+
+        case At(vec, index)         =>
+          anfize(vec) { vec2 =>
+            if (vec.eq(vec2)) recur(tree)
+            else At(vec2, index)
+          }
+
+        case Range(vec, to, from)   =>
+          anfize(vec) { vec2 =>
+            if (vec.eq(vec2)) recur(tree)
+            else Range(vec2, to, from).as[T]
+          }
+
+        case VecLit(bits)           =>
+          tree
+
+        case Var(sym, tpe)          =>
+          tree
+
+        case Let(sym, sig, body)    =>
+          sig match {
+            case Let(sym, sig2, body2) =>
+              Let(sym, sig2, Let(sym, body2, body))
+            case _ =>  recur(tree)
+          }
+
+        case Fsm(sym, init, body)   =>
+          val body2 = recur(body)
+          if (body.eq(body2)) tree
+          else Fsm(sym, init, body2)
+
+        case And(lhs, rhs)          =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else And(lhs2, rhs2)
+            }
+          }
+
+        case Or(lhs, rhs)           =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else Or(lhs2, rhs2)
+            }
+          }
+
+        case Not(in)                =>
+          anfize(in) { in2 =>
+            if (in.eq(in2)) recur(tree)
+            else Not(in2)
+          }
+
+        case Concat(lhs, rhs)     =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else Concat(lhs2, rhs2).as[T]
+            }
+          }
+
+        case Equals(lhs, rhs)     =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else Equals(lhs2, rhs2)
+            }
+          }
+
+        case Plus(lhs, rhs)       =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else Plus(lhs2, rhs2)
+            }
+          }
+
+        case Minus(lhs, rhs)      =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else Minus(lhs2, rhs2)
+            }
+          }
+
+        case Mux(cond, thenp, elsep)  =>
+          anfize(cond) { cond2 =>
+            anfize(thenp) { thenp2 =>
+              anfize(elsep) { elsep2 =>
+                if (cond.eq(cond2) && thenp.eq(thenp2) && elsep.eq(elsep2)) recur(tree)
+                else Mux(cond2, thenp2, elsep2)
+              }
+            }
+          }
+
+        case Shift(lhs, rhs, isLeft)   =>
+          anfize(lhs) { lhs2 =>
+            anfize(rhs) { rhs2 =>
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
+              else Shift(lhs2, rhs2, isLeft)
+            }
+          }
+      }
+    }
+
+    fix(sig)(anfMap.apply[T])
+  }
+
   def interpret[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value] => Value = {
     def and(lhs: Value, rhs: Value): Value = (lhs, rhs) match {
       case (lhs1 ~ rhs1, lhs2 ~ rhs2) =>
