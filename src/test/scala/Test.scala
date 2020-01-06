@@ -102,9 +102,8 @@ class TestSuite {
     // println(show(lift(circuit)))
     // println(show(anf(lift(circuit))))
     // println(show(inlining(anf(lift(circuit)))))
-    // println(show(inlining(anf(flatten(lift(circuit))))))
 
-    val opt = show(detuple(inlining(anf(flatten(lift(circuit))))))
+    val opt = show(inlining(detuple(inlining(anf(flatten(lift(circuit)))))))
     // println(opt)
 
     // writeFile("check/filter.check", opt)

@@ -855,7 +855,7 @@ object phases {
 
 
   def toVerilog[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
-    val normailized = detuple(inlining(anf(flatten(lift(sig)))))
+    val normailized = inlining(detuple(inlining(anf(flatten(lift(sig))))))
 
     import scala.collection.mutable.ListBuffer
 
@@ -968,11 +968,6 @@ object phases {
         val lo = fsm.width
         val hiOut = lo - 1
 
-        val next = recur(body)
-        wires += s"wire [$hi:0] next;"
-        assigns += s"assign next = $next;"
-        assigns += s"assign out = next[$hiOut:0];"
-
         val stateHi = body.width - fsm.width - 1
         regs += s"reg [$stateHi:0] ${sym.name};"
 
@@ -983,12 +978,32 @@ object phases {
               |end\n\n""".stripMargin
         }
 
-        val always = {
-          s"""|always @ (posedge CLK)
-              |  ${sym.name} <= next[$hi:$lo];\n\n""".stripMargin
-        }
+        body match {
+          case Concat(sigState, sigOut) => // no need to generate next, save wire bits
+            val state = recur(sigState)
+            val out = recur(sigOut)
+            assigns += s"assign out = $out;"
 
-        template(initial + always, sequential = true)
+            val always = {
+              s"""|always @ (posedge CLK)
+                  |  ${sym.name} <= $state;\n\n""".stripMargin
+            }
+
+            template(initial + always, sequential = true)
+
+          case _ =>
+            val next = recur(body)
+            wires += s"wire [$hi:0] next;"
+            assigns += s"assign next = $next;"
+            assigns += s"assign out = next[$hiOut:0];"
+
+            val always = {
+              s"""|always @ (posedge CLK)
+                  |  ${sym.name} <= next[$hi:$lo];\n\n""".stripMargin
+            }
+
+            template(initial + always, sequential = true)
+        }
 
       case code => // combinational
         val out = recur(code)

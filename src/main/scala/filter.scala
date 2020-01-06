@@ -6,7 +6,7 @@ import scala.language.implicitConversions
 
 object Filter {
   def delay[T <: Type](sig: Signal[T], init: Value): Signal[T] =
-    fsm("delay", init) { (last: Signal[T]) =>
+    fsm("s", init) { (last: Signal[T]) =>
       sig ~ last
     }
 
