@@ -394,6 +394,8 @@ object phases {
    *  vec[6..6]              ~~>     vec[6]
    *  vec[6..3][3..2]        ~~>     vec[6..5]
    *  vec[6..3][2]           ~~>     vec[5]
+   *  vec ++ []              ~~>     vec
+   *  [] ++ vec              ~~>     vec
    */
   def optsel[T <: Type](sig: Signal[T]): Signal[T] = {
     val rangeOptMap = new TreeMap {
@@ -427,6 +429,10 @@ object phases {
         case At(Range(vec, hi, lo), index) =>
           val index2 = index + lo
           At(vec, index2)
+
+        case Concat(lhs, rhs) if lhs.width == 0 => rhs.as[T]
+
+        case Concat(lhs, rhs) if rhs.width == 0 => lhs.as[T]
 
         case _ =>
           recur(tree)
