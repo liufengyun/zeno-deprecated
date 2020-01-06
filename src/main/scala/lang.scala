@@ -168,22 +168,21 @@ object lang {
     }
   }
 
-  // TODO: restrict to vec types
-  case class And[T <: Type](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
+  case class And[T <: Num](lhs: Signal[Vec[T]], rhs: Signal[Vec[T]]) extends Signal[Vec[T]] {
     assert(lhs.tpe == rhs.tpe, "lhs.tpe = " + lhs.tpe + ", rhs.tpe = " + rhs.tpe)
     val tpe: Type = lhs.tpe
   }
 
-  case class Or[T <: Type](lhs: Signal[T], rhs: Signal[T]) extends Signal[T] {
+  case class Or[T <: Num](lhs: Signal[Vec[T]], rhs: Signal[Vec[T]]) extends Signal[Vec[T]] {
     assert(lhs.tpe == rhs.tpe, "lhs.tpe = " + lhs.tpe + ", rhs.tpe = " + rhs.tpe)
     val tpe: Type = lhs.tpe
   }
 
-  case class Not[T <: Type](in: Signal[T]) extends Signal[T] {
+  case class Not[T <: Num](in: Signal[Vec[T]]) extends Signal[Vec[T]] {
     val tpe: Type = in.tpe
   }
 
-  /** vec1 ++ vec2. Used to reduce program size */
+  /** vec1 ++ vec2 */
   case class Concat[S <: Num, T <: Num, U <: Num](vec1: Signal[Vec[S]], vec2: Signal[Vec[T]]) extends Signal[Vec[U]] {
     val tpe: Type = {
       val size = vec1.size + vec2.size
@@ -191,34 +190,34 @@ object lang {
     }
   }
 
-  /** vec1 === vec2. Used to reduce program size */
-  case class Equals[T <: Type](lhs: Signal[T], rhs: Signal[T]) extends Signal[Bit] {
+  /** vec1 === vec2 */
+  case class Equals[T <: Num](lhs: Signal[Vec[T]], rhs: Signal[Vec[T]]) extends Signal[Bit] {
     assert(lhs.tpe == rhs.tpe, "lhs.tpe = " + lhs.tpe + ", rhs.tpe = " + rhs.tpe)
     val tpe: Type = Vec(1)
   }
 
-  /** vec1 + vec2. Used to reduce program size */
+  /** vec1 + vec2 */
   case class Plus[T <: Num](lhs: Signal[Vec[T]], rhs: Signal[Vec[T]]) extends Signal[Vec[T]] {
     assert(lhs.tpe == rhs.tpe, "lhs.tpe = " + lhs.tpe + ", rhs.tpe = " + rhs.tpe)
 
     val tpe: Type = lhs.tpe
   }
 
-  /** vec1 + vec2. Used to reduce program size */
+  /** vec1 + vec2 */
   case class Minus[T <: Num](lhs: Signal[Vec[T]], rhs: Signal[Vec[T]]) extends Signal[Vec[T]] {
     assert(lhs.tpe == rhs.tpe, "lhs.tpe = " + lhs.tpe + ", rhs.tpe = " + rhs.tpe)
 
     val tpe: Type = lhs.tpe
   }
 
-  /** if (c) x else y. Used to reduce program size  */
+  /** if (c) x else y */
   case class Mux[T <: Type](cond: Signal[Bit], thenp: Signal[T], elsep: Signal[T]) extends Signal[T] {
     assert(thenp.tpe == elsep.tpe, "thenp.tpe = " + thenp.tpe + ", elsep.tpe = " + elsep.tpe)
 
     val tpe: Type = thenp.tpe
   }
 
-  /** x << y and x >> y. Used to reduce program size  */
+  /** x << y and x >> y */
   case class Shift[S <: Num, T <: Num](vec: Signal[Vec[S]], amount: Signal[Vec[T]], isLeft: Boolean) extends Signal[Vec[S]] {
     val tpe: Type = vec.tpe
   }
@@ -285,13 +284,13 @@ object lang {
 
   def mux[T <: Type](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = Mux(cond, x, y)
 
-  def [T <: Type](sig: Signal[T]) unary_! : Signal[T] = Not(sig)
+  def [T <: Num](sig: Signal[Vec[T]]) unary_! : Signal[Vec[T]] = Not(sig)
 
-  def [T <: Type](lhs: Signal[T]) & (rhs: Signal[T]): Signal[T] = And(lhs, rhs)
+  def [T <: Num](lhs: Signal[Vec[T]]) & (rhs: Signal[Vec[T]]): Signal[Vec[T]] = And(lhs, rhs)
 
-  def [T <: Type](lhs: Signal[T]) | (rhs: Signal[T]): Signal[T] = Or(lhs, rhs)
+  def [T <: Num](lhs: Signal[Vec[T]]) | (rhs: Signal[Vec[T]]): Signal[Vec[T]] = Or(lhs, rhs)
 
-  def [T <: Type](lhs: Signal[T]) ^ (rhs: Signal[T]): Signal[T] = Or(And(lhs, !rhs), And(!lhs, rhs))
+  def [T <: Num](lhs: Signal[Vec[T]]) ^ (rhs: Signal[Vec[T]]): Signal[Vec[T]] = Or(And(lhs, !rhs), And(!lhs, rhs))
 
   def [T <: Type](value: Value) toSignal: Signal[T] = value match {
     case PairV(l, r) =>
