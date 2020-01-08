@@ -312,25 +312,6 @@ object Controller {
     sb.toString
   }
 
-  /** Show prompt if `-Xprompt` is passed as a flag to the compiler */
-  def displayPrompt(): Unit = {
-    println()
-    print("a)bort, s)tack, r)esume: ")
-    def loop(): Unit = System.in.read() match {
-      case 'a' | 'A' =>
-        new Throwable().printStackTrace()
-        System.exit(1)
-      case 's' | 'S' =>
-        new Throwable().printStackTrace()
-        println()
-      case 'r' | 'R' =>
-        ()
-      case _ =>
-        loop()
-    }
-    loop()
-  }
-
 }
 
 
