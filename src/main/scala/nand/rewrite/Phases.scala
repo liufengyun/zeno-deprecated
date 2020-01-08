@@ -285,6 +285,20 @@ object Phases {
     fix(sig)(rangeOptMap.apply[T])
   }
 
+  object ANF {
+    def unapply[T <: Type](sig: Signal[T]): Boolean = sig match {
+      case Var(_, _)        => true
+      case At(vec, _)       => unapply(vec)
+      case Range(vec, _, _) => unapply(vec)
+      case Concat(lhs, rhs) => unapply(lhs) && unapply(rhs)
+      case Par(lhs, rhs)    => unapply(lhs) && unapply(rhs)
+      case Left(pair)       => unapply(pair)
+      case Right(pair)      => unapply(pair)
+      case VecLit(_)        => true
+      case _                => false
+    }
+  }
+
   /** A Normal Form
    *
    *  Precondition: all FSMs must be lifted
@@ -292,7 +306,7 @@ object Phases {
   def anf[T <: Type](sig: Signal[T]): Signal[T] = {
     def anfize[S <: Type, T <: Type](sig: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
       sig match {
-        case Var(_, _) | At(_, _) | Range(_, _, _) | Concat(_, _) | Left(_) | Right(_) | Par(_, _) | VecLit(_) =>
+        case ANF() =>
           cont(sig)
 
         case Let(sym, sig2, body) =>
@@ -447,53 +461,25 @@ object Phases {
     }
 
     val inliningMap = new TreeMap {
-      import scala.collection.mutable.Map
-      val map: Map[Symbol, Signal[_]] = Map.empty
+      import java.util.IdentityHashMap
+      val map: IdentityHashMap[Symbol, Signal[_]] = new IdentityHashMap()
 
       def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
-        case Let(sym, rhs @ Var(_, _), body) =>
-          map(sym) = rhs
-          recur(body)
-
-        case Let(sym, rhs @ Concat(_, _), body) =>
-          map(sym) = rhs
-          recur(body)
-
-        case Let(sym, rhs @ At(_, _), body) =>
-          map(sym) = rhs
-          recur(body)
-
-        case Let(sym, rhs @ Range(_, _, _), body) =>
-          map(sym) = rhs
-          recur(body)
-
-        case Let(sym, rhs @ Left(_), body) =>
-          map(sym) = rhs
-          recur(body)
-
-        case Let(sym, rhs @ Right(_), body) =>
-          map(sym) = rhs
-          recur(body)
-
-        case Let(sym, rhs @ Par(_, _), body) =>
-          map(sym) = rhs
-          recur(body)
-
-        case Let(sym, rhs @ VecLit(_), body) =>
-          map(sym) = rhs
+        case Let(sym, rhs @ ANF(), body) =>
+          map.put(sym, rhs)
           recur(body)
 
         case Let(sym, rhs, body) =>
           val count = usageCount(sym, body)
           if (count == 0) recur(body) // dead code elimination
           else if (count == 1) {
-            map(sym) = rhs
+            map.put(sym, rhs)
             recur(body)
           }
           else recur(tree)
 
         case Var(sym, tpe) =>
-          if (map.contains(sym)) map(sym).as[T]
+          if (map.containsKey(sym)) map.get(sym).as[T]
           else tree
 
         case _ =>
