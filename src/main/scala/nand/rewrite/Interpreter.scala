@@ -97,7 +97,7 @@ object Interpreter {
     }
 
     def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value]): Value = { /* println(show(sig)); */ sig} match {
-      case Par(lhs, rhs)          =>
+      case Pair(lhs, rhs)          =>
         recur(lhs) ~ recur(rhs)
 
       case Left(pair)             =>

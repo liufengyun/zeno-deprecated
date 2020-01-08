@@ -6,9 +6,6 @@ import lang._
 import core._
 import Trees._, Types._, Values._
 
-// TODO: dotty cannot resolve `Vec`
-import Types.Vec
-
 object Phases {
 
   def fix[T <: AnyRef](v: T)(fn: T => T): T = {
@@ -32,10 +29,10 @@ object Phases {
         case Or(Fsm(sym, init, body), rhs) =>
           Fsm(sym, init, let("x", body) { x => x.left ~ (x.right | rhs) } )
 
-        case Par(lhs, Fsm(sym, init, body)) =>
+        case Pair(lhs, Fsm(sym, init, body)) =>
           Fsm(sym, init, let("x", body) { x => x.left ~ (lhs ~ x.right) } )
 
-        case Par(Fsm(sym, init, body), rhs) =>
+        case Pair(Fsm(sym, init, body), rhs) =>
           Fsm(sym, init, let("x", body) { x => x.left ~ (x.right ~ rhs) } )
 
         case Minus(lhs, Fsm(sym, init, body)) =>
@@ -133,14 +130,14 @@ object Phases {
 
   def detuple[T <: Type, U <: Num](sig: Signal[T]): Signal[Vec[U]] = {
     def toVecType(tp: Type): Vec[_] = tp match {
-      case Pair(lhs, rhs) =>
+      case PairT(lhs, rhs) =>
         (toVecType(lhs), toVecType(rhs)) match {
-          case (Vec(m), Vec(n)) =>
+          case (VecT(m), VecT(n)) =>
             val width = m + n
-            Vec(width)
+            VecT(width)
         }
 
-      case tp: Vec[_] =>
+      case tp: VecT[_] =>
         tp
     }
 
@@ -156,7 +153,7 @@ object Phases {
 
 
     def recur[T <: Type, U <: Num](sig: Signal[T]): Signal[Vec[U]] = sig match {
-      case Par(lhs, rhs)          =>
+      case Pair(lhs, rhs)          =>
         (recur(lhs) ++ recur(rhs)).as[Vec[U]]
 
       case Left(pair)             =>
@@ -279,9 +276,9 @@ object Phases {
 
         case Concat(lhs, rhs) if rhs.width == 0 => lhs.as[T]
 
-        case Left(Par(lhs, rhs)) => lhs
+        case Left(Pair(lhs, rhs)) => lhs
 
-        case Right(Par(lhs, rhs)) => rhs
+        case Right(Pair(lhs, rhs)) => rhs
 
         case _ =>
           recur(tree)
@@ -297,7 +294,7 @@ object Phases {
       case At(vec, _)       => unapply(vec)
       case Range(vec, _, _) => unapply(vec)
       case Concat(lhs, rhs) => unapply(lhs) && unapply(rhs)
-      case Par(lhs, rhs)    => unapply(lhs) && unapply(rhs)
+      case Pair(lhs, rhs)   => unapply(lhs) && unapply(rhs)
       case Left(pair)       => unapply(pair)
       case Right(pair)      => unapply(pair)
       case VecLit(_)        => true
@@ -326,11 +323,11 @@ object Phases {
         case ANF() =>
           cont(tree)
 
-        case Par(lhs, rhs)          =>
+        case Pair(lhs, rhs)          =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
-              else cont(Par(lhs2, rhs2))
+              else cont(Pair(lhs2, rhs2))
             }
           }
 

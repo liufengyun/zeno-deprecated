@@ -8,7 +8,7 @@ abstract class TreeAccumulator[X] {
   def apply[T <: Type](x: X, sig: Signal[T]): X
 
   def recur[T <: Type](x: X, tree: Signal[T]): X = tree match {
-    case Par(lhs, rhs)          =>
+    case Pair(lhs, rhs)          =>
       this(this(x, lhs), rhs)
 
     case Left(pair)             =>

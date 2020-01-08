@@ -46,20 +46,20 @@ private[nand] object Trees {
 
   var count = 0
 
-  case class Par[S <: Type, T <: Type](lhs: Signal[S], rhs: Signal[T]) extends Signal[S ~ T] {
-    val tpe: Type = new Pair(lhs.tpe, rhs.tpe)
+  case class Pair[S <: Type, T <: Type](lhs: Signal[S], rhs: Signal[T]) extends Signal[S ~ T] {
+    val tpe: Type = new PairT(lhs.tpe, rhs.tpe)
   }
 
   case class Left[S <: Type, T <: Type](pair: Signal[S ~ T]) extends Signal[S] {
     val tpe: Type = pair.tpe match {
-      case Pair(t1, t2) => t1
+      case PairT(t1, t2) => t1
       case _ => ???  // impossible
     }
   }
 
   case class Right[S <: Type, T <: Type](pair: Signal[S ~ T]) extends Signal[T] {
     val tpe: Type = pair.tpe match {
-      case Pair(t1, t2) => t2
+      case PairT(t1, t2) => t2
       case _ => ???  // impossible
     }
   }
@@ -67,7 +67,7 @@ private[nand] object Trees {
   case class At[T <: Num](vec: Signal[Vec[T]], index: Int) extends Signal[Bit] {
     assert(index < vec.width, "vec.width = " + vec.width + ", index = " + index)
 
-    val tpe: Type = Vec(1)
+    val tpe: Type = VecT(1)
   }
 
   case class Range[T <: Num, S <: Num](vec: Signal[Vec[T]], to: Int, from: Int) extends Signal[Vec[S]] {
@@ -78,7 +78,7 @@ private[nand] object Trees {
 
     val tpe: Type = {
       val width = to - from + 1
-      Vec(width)
+      VecT(width)
     }
   }
 
@@ -86,7 +86,7 @@ private[nand] object Trees {
   case class VecLit[T <: Num](bits: List[0 | 1]) extends Signal[Vec[T]] {
     val tpe: Type = {
       val width = bits.size
-      Vec(width)
+      VecT(width)
     }
   }
 
@@ -100,12 +100,12 @@ private[nand] object Trees {
 
   case class Fsm[S <: Type, T <: Type](sym: Symbol, init: Value, body: Signal[S ~ T]) extends Signal[T] {
     val tpe: Type = body.tpe match {
-      case Pair(t1, t2) => t2
-      case Vec(width) =>
+      case PairT(t1, t2) => t2
+      case VecT(width) =>
         // after detupling
         val initV = init.asInstanceOf[VecV]
         val outSize = width - initV.width
-        Vec(outSize)
+        VecT(outSize)
     }
   }
 
@@ -127,14 +127,14 @@ private[nand] object Trees {
   case class Concat[S <: Num, T <: Num, U <: Num](vec1: Signal[Vec[S]], vec2: Signal[Vec[T]]) extends Signal[Vec[U]] {
     val tpe: Type = {
       val width = vec1.width + vec2.width
-      Vec(width)
+      VecT(width)
     }
   }
 
   /** vec1 === vec2 */
   case class Equals[T <: Num](lhs: Signal[Vec[T]], rhs: Signal[Vec[T]]) extends Signal[Bit] {
     assert(lhs.tpe == rhs.tpe, "lhs.tpe = " + lhs.tpe + ", rhs.tpe = " + rhs.tpe)
-    val tpe: Type = Vec(1)
+    val tpe: Type = VecT(1)
   }
 
   /** vec1 + vec2 */

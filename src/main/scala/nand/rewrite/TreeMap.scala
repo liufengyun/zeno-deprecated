@@ -8,11 +8,11 @@ abstract class TreeMap {
   def apply[T <: Type](sig: Signal[T]): Signal[T]
 
   def recur[T <: Type](tree: Signal[T]): Signal[T] = tree match {
-    case Par(lhs, rhs)          =>
+    case Pair(lhs, rhs)          =>
       val lhs2 = this(lhs)
       val rhs2 = this(rhs)
       if (lhs2.eq(lhs) && rhs2.eq(rhs)) tree
-      else Par(lhs2, rhs2)
+      else Pair(lhs2, rhs2)
 
     case Left(pair)             =>
       val pair2 = this(pair)

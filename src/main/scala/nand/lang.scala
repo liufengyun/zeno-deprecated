@@ -15,12 +15,11 @@ object lang {
   type Value             = core.Value
 
   type Type             =  Types.Type
-  type Vec[T <: Num]    =  Types.Vec[T]
+  type Vec[T <: Num]    =  Types.VecT[T]
   type Num              =  Types.Num
   type Bit              =  Types.Bit
 
-  type Pair[S <: Type, T <: Type] =  Types.Pair[S, T]
-  type ~[S <: Type, T <: Type]    =  Types.~[S, T]
+  type ~[S <: Type, T <: Type]    =  Types.PairT[S, T]
 
   def let[S <: Type, T <: Type](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] = {
     val sym = Symbol.fresh(name)
@@ -34,12 +33,12 @@ object lang {
 
   def [S <: Type, T <: Type](t: Signal[S ~ T]) right: Signal[T] = Right(t)
 
-  def [T <: Type, U <: Type](lhs: Signal[T]) ~ (rhs: Signal[U]): Signal[T ~ U] = Par(lhs, rhs)
+  def [T <: Type, U <: Type](lhs: Signal[T]) ~ (rhs: Signal[U]): Signal[T ~ U] = Pair(lhs, rhs)
 
   def [T <: Type](sig: Signal[_]) as: Signal[T] = sig.as[T]
 
   def [T <: Type](sig: Signal[T]) width: Int = sig.tpe match {
-    case Vec(width) => width
+    case VecT(width) => width
     case _ => throw new Exception("access width on non-vector signal")
   }
 
@@ -148,7 +147,7 @@ object lang {
     }
 
     def unapply(tp: Type): Option[(Type, Type)] = tp match {
-      case p: Types.Pair[_, _] => Some(p.lhs -> p.rhs)
+      case p: PairT[_, _] => Some(p.lhs -> p.rhs)
       case _ => None
     }
   }

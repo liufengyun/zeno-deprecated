@@ -109,7 +109,7 @@ object Verilog {
 
         "( " + recur(lhs) + s" $op " + recur(rhs) + " )"
 
-      case Par(_, _) | Left(_) | Right(_) =>
+      case Pair(_, _) | Left(_) | Right(_) =>
         ??? // impossible after detupling
 
       case Fsm(_, _, _)   =>

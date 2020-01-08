@@ -18,10 +18,10 @@ private[nand] object Values {
 
   def typeOf(value: Value): Type = value match {
     case PairV(l, r)  =>
-      new Pair(typeOf(l), typeOf(r))
+      new PairT(typeOf(l), typeOf(r))
 
     case VecV(bits)   =>
       val width = bits.size
-      Vec(width)
+      VecT(width)
   }
 }

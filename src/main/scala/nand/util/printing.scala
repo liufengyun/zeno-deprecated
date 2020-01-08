@@ -21,7 +21,7 @@ object Printing {
 
     def recur[T <: Type](sig: Signal[T]): String =
       sig match {
-        case Par(lhs, rhs) => recur(lhs) + " ~ " + recur(rhs)
+        case Pair(lhs, rhs) => recur(lhs) + " ~ " + recur(rhs)
 
         case Left(pair)    => recur(pair) + ".1"
 
@@ -92,8 +92,8 @@ object Printing {
   }
 
   def show(tpe: Type): String = tpe match {
-    case Pair(t1, t2) => show(t1) + " ~ " + show(t2)
-    case Vec(width)    => "Vec[" + width + "]"
+    case PairT(t1, t2) => show(t1) + " ~ " + show(t2)
+    case VecT(width)    => "Vec[" + width + "]"
   }
 
   def show(value: Value): String = value match {
