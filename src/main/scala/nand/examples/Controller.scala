@@ -1,7 +1,7 @@
-package ysm
+package nand
+package examples
 
 import lang._
-import phases._
 
 import scala.language.implicitConversions
 
@@ -53,7 +53,7 @@ object Controller {
     val default: Signal[Vec[16]] = 0.W[16]
     (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
       when[Vec[16]] (addr === curAddr.W[addrWidth.type]) {
-        if (curAddr < prog.size) prog(curAddr).W[16]
+        if (curAddr < prog.width) prog(curAddr).W[16]
         else default
       } otherwise {
         acc
@@ -82,9 +82,9 @@ object Controller {
   }
 
   def processor(prog: Array[Int], busIn: Signal[BusIn]): Signal[BusOut ~ Debug] = {
-    assert(prog.size > 0)
+    assert(prog.width > 0)
     var addrW = 1
-    while ((1 << addrW) < prog.size) addrW += 1
+    while ((1 << addrW) < prog.width) addrW += 1
 
     val addrWidth = addrW
     type PC  = Vec[addrWidth.type]
@@ -210,11 +210,11 @@ object Controller {
   }
 
   def test(prog: String): String = {
-    val busIn = variable[BusIn]("busIn")
+    val busIn = input[BusIn]("busIn")
     val instructions = Assembler.assemble(prog)
     val code = processor(instructions, busIn)
     // println(show(code))
-    val fsm = interpret(busIn :: Nil, code)
+    val fsm = code.eval(busIn)
 
     var run = true
     var maxInstructions = 30000
@@ -222,9 +222,9 @@ object Controller {
 
     val memory = scala.collection.mutable.Map.empty[Short, Int]
 
-    var input: Value = 0.toValue(32)
+    var inputV: Value = 0.toValue(32)
     while(run) {
-      val (addr ~ read ~ write ~ writedata) ~ (acc ~ pc ~ instr ~ exit) = fsm(input :: Nil)
+      val (addr ~ read ~ write ~ writedata) ~ (acc ~ pc ~ instr ~ exit) = fsm(inputV :: Nil)
 
       if (write.toInt == 1) {
         val data = writedata.toInt
@@ -239,7 +239,7 @@ object Controller {
 
       if (read.toInt == 1) {
         val data = memory.getOrElse(addr.toShort, 0)
-        input = data.toValue(32)
+        inputV = data.toValue(32)
       }
 
       // println("pc = " + pc.toInt)
@@ -255,12 +255,14 @@ object Controller {
   }
 
   def testDetupled(prog: String): String = {
-    val busIn = variable[BusIn]("busIn")
+    import nand.rewrite.Phases
+
+    val busIn = input[BusIn]("busIn")
     val instructions = Assembler.assemble(prog)
     val code = processor(instructions, busIn)
-    val detupled = phases.detuple(code)
+    val detupled = Phases.detuple(code)
     // println(show(detupled))
-    val fsm = phases.interpret(busIn :: Nil, detupled)
+    val fsm = detupled.eval(busIn)
 
     var run = true
     var maxInstructions = 30000
@@ -268,17 +270,17 @@ object Controller {
 
     val memory = scala.collection.mutable.Map.empty[Short, Int]
 
-    var input: Value = 0.toValue(32)
+    var inputV: Value = 0.toValue(32)
     while(run) {
-      val output = fsm(input :: Nil).asInstanceOf[VecV]
-      val hi = output.size - 1
+      val output = fsm(inputV :: Nil).asInstanceOf[VecV]
+      val hi = output.width - 1
       val addr = output(hi, hi - 7)
       val read = output(hi - 8)
       val write = output(hi - 9)
       val writedata = output(hi - 10, hi - 10 - 31)
       val exit = output(0)
 
-      // println("size = " + output.size)
+      // println("width = " + output.width)
       // println("write = " + write.toInt)
       // println("writedata = " + writedata.toInt)
 
@@ -295,7 +297,7 @@ object Controller {
 
       if (read.toInt == 1) {
         val data = memory.getOrElse(addr.toShort, 0)
-        input = data.toValue(32)
+        inputV = data.toValue(32)
       }
 
       // println("pc = " + pc.asInstanceOf[Value[Vec[0]]].toInt)
@@ -345,7 +347,7 @@ object Assembler {
       !line.isEmpty && !line.startsWith("//")
     }
 
-    // println("effective lines = " + lines.size)
+    // println("effective lines = " + lines.width)
     // println(lines.mkString("\n"))
 
     val Label = "(.*):".r
@@ -370,7 +372,7 @@ object Assembler {
       s.toInt
     }
 
-    // println("lines size = " + lines.size)
+    // println("lines width = " + lines.width)
 
     val instructions = for (line <- lines if !line.matches("(.*:)")) yield {
       val tokens = line.split("\\s+")
@@ -399,7 +401,7 @@ object Assembler {
       }
     }
 
-    // println("instr size: " + instructions.size)
+    // println("instr width: " + instructions.width)
 
     instructions.toArray
   }

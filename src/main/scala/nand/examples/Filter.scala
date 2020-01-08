@@ -1,4 +1,5 @@
-package ysm
+package nand
+package examples
 
 import lang._
 

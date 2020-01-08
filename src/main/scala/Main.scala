@@ -1,10 +1,9 @@
-package ysm
+package nand
 
-import lang._
+import examples.Controller
+
 object Main {
-
   def main(args: Array[String]): Unit = {
     println(Controller.test(args(0)))
   }
-
 }

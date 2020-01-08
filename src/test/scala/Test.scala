@@ -1,4 +1,4 @@
-package ysm
+package nand
 
 import org.junit.Test
 import org.junit.Assert._
@@ -8,7 +8,7 @@ import java.nio.file.{Files, Paths, FileSystems, Path}
 import java.io.File
 
 import lang._
-import phases._
+import examples._
 
 import scala.language.implicitConversions
 class TestSuite {
@@ -41,19 +41,19 @@ class TestSuite {
 
     // generate verilog
 
-    val busIn = variable[Controller.BusIn]("busIn")
+    val busIn = input[Controller.BusIn]("busIn")
     val instructions = Assembler.assemble("asm/jump.s")
     val code = Controller.processor(instructions, busIn)
-    writeFile("verilog/controller.v", toVerilog("Controller", List(busIn), code))
+    writeFile("verilog/controller.v", code.toVerilog("Controller", busIn))
   }
 
   @Test def adder2(): Unit = {
-    val a = variable[Vec[2]]("a")
-    val b = variable[Vec[2]]("b")
+    val a = input[Vec[2]]("a")
+    val b = input[Vec[2]]("b")
     val circuit = Adder.adder2(a, b)
-    val add2 = interpret(List(a, b), circuit)
+    val add2 = circuit.eval(a, b)
 
-    writeFile("verilog/adder.v", toVerilog("Adder", List(a, b), circuit))
+    writeFile("verilog/adder.v", circuit.toVerilog("Adder", a, b))
 
     {
       val Value(c1, s1, s0) = add2(Value(1, 0) :: Value(0, 1) :: Nil)
@@ -71,10 +71,10 @@ class TestSuite {
   }
 
   @Test def adderN(): Unit = {
-    val a = variable[Vec[3]]("a")
-    val b = variable[Vec[3]]("b")
+    val a = input[Vec[3]]("a")
+    val b = input[Vec[3]]("b")
     val circuit = Adder.adderN(a, b)
-    val add3 = interpret(List(a, b), circuit)
+    val add3 = circuit.eval(a, b)
 
     {
       val Value(c2) ~ Value(s2, s1, s0) = add3(Value(1, 0, 1) :: Value(0, 1, 0) :: Nil)
@@ -94,9 +94,9 @@ class TestSuite {
   }
 
   @Test def filter(): Unit = {
-    val a = variable[Vec[8]]("a")
+    val a = input[Vec[8]]("a")
     val circuit = Filter.movingAverage(a)
-    val avg = interpret(List(a), circuit)
+    val avg = circuit.eval(a)
 
     // println(show(circuit))
     // println(show(lift(circuit)))
@@ -109,7 +109,7 @@ class TestSuite {
     // writeFile("check/filter.check", opt)
     checkFile("check/filter.check", opt)
 
-    writeFile("verilog/filter.v", toVerilog("Filter", List(a), circuit))
+    writeFile("verilog/filter.v", circuit.toVerilog("Filter", a))
 
     val o1 = avg(10.toValue(8) :: Nil)
     assertEquals(o1.toInt, 2)
@@ -122,13 +122,13 @@ class TestSuite {
   }
 
   @Test def arithmetic(): Unit = {
-    val a = variable[Vec[8]]("a")
-    val b = variable[Vec[4]]("b")
+    val a = input[Vec[8]]("a")
+    val b = input[Vec[4]]("b")
     val circuit = a << b
-    val shift = interpret(List(a, b), circuit)
+    val shift = circuit.eval(a, b)
 
 
-    writeFile("verilog/shift.v", toVerilog("Shift", List(a, b), circuit))
+    writeFile("verilog/shift.v", circuit.toVerilog("Shift", a, b))
 
     val o1 = shift(1.toValue(8) :: 1.toValue(4) :: Nil)
     assertEquals(o1.toInt, 2)

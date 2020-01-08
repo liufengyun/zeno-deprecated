@@ -1,4 +1,5 @@
-package ysm
+package nand
+package examples
 
 import lang._
 
@@ -42,7 +43,7 @@ object Adder {
   }
 
   def adderN[N <: Num](lhs: Signal[Vec[N]], rhs: Signal[Vec[N]]): Signal[Bit ~ Vec[N]] = {
-    val n: Int = lhs.size
+    val n: Int = lhs.width
 
     def recur(index: Int, cin: Signal[Bit], acc: Signal[Vec[_]]): Signal[Bit ~ Vec[N]] =
       if (index >= n) cin ~ acc.as[Vec[N]]
