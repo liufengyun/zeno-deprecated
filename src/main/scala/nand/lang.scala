@@ -173,7 +173,7 @@ object lang {
     def apply(bit: 0 | 1, bits: (0 | 1)*): Value =
       new VecV(bit :: bits.toList)
 
-    def unapplySeq[T <: Type](value: Value): Option[List[0 | 1]] = value match {
+    def unapplySeq(value: Value): Option[List[0 | 1]] = value match {
       case VecV(bits) => Some(bits)
       case _ => None
     }
