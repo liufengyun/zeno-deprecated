@@ -316,115 +316,112 @@ object Phases {
           cont(sig)
 
         case Let(sym, sig2, body) =>
-          Let(sym, sig2, cont(body))
+          Let(sym, sig2, recur(body)(cont))
 
         case _ =>
-          let(sig)(cont)
+          recur(sig) { sig2 => let(sig2)(cont) }
       }
 
-    val anfMap = new TreeMap {
-      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+    def recur[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] = tree match {
+        case ANF() =>
+          cont(tree)
+
         case Par(lhs, rhs)          =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else Par(lhs2, rhs2)
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(Par(lhs2, rhs2))
             }
           }
 
         case Left(pair)             =>
           anfize(pair) { pair2 =>
-            if (pair.eq(pair2)) recur(tree)
-            else Left(pair2)
+            if (pair.eq(pair2)) cont(tree)
+            else cont(Left(pair2))
           }
 
         case Right(pair)            =>
           anfize(pair) { pair2 =>
-            if (pair.eq(pair2)) recur(tree)
-            else Right(pair2)
+            if (pair.eq(pair2)) cont(tree)
+            else cont(Right(pair2))
           }
 
         case At(vec, index)         =>
           anfize(vec) { vec2 =>
-            if (vec.eq(vec2)) recur(tree)
-            else At(vec2, index)
+            if (vec.eq(vec2)) cont(tree)
+            else cont(At(vec2, index))
           }
 
         case Range(vec, to, from)   =>
           anfize(vec) { vec2 =>
-            if (vec.eq(vec2)) recur(tree)
-            else Range(vec2, to, from).as[T]
+            if (vec.eq(vec2)) cont(tree)
+            else cont(Range(vec2, to, from).as[S])
           }
 
-        case VecLit(bits)           =>
-          tree
-
-        case Var(sym, tpe)          =>
-          tree
-
         case Let(sym, sig, body)    =>
-          sig match {
-            case Let(sym2, sig2, body2) =>
-              Let(sym2, sig2, Let(sym, body2, body))
-            case _ =>  recur(tree)
+          anfize(sig) { sig2 =>
+            val body2 = anfize(body)(identity)
+            if (sig.eq(sig2) && body.eq(body2)) cont(tree)
+            else cont(Let(sym, sig2, body2))
           }
 
         case Fsm(sym, init, body)   =>
-          val body2 = recur(body)
-          if (body.eq(body2)) tree
-          else Fsm(sym, init, body2)
+          anfize(body) { body2 =>
+            if (body.eq(body2)) cont(tree)
+            else Fsm(sym, init, body2.as)
+          }
 
         case And(lhs, rhs)          =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else And(lhs2, rhs2)
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(And(lhs2, rhs2))
             }
           }
 
         case Or(lhs, rhs)           =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else Or(lhs2, rhs2)
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(Or(lhs2, rhs2))
             }
           }
 
         case Not(in)                =>
           anfize(in) { in2 =>
-            if (in.eq(in2)) recur(tree)
-            else Not(in2)
+            if (in.eq(in2)) cont(tree)
+            else cont(Not(in2))
           }
 
         case Concat(lhs, rhs)     =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else Concat(lhs2, rhs2).as[T]
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(Concat(lhs2, rhs2).as[S])
             }
           }
 
         case Equals(lhs, rhs)     =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else Equals(lhs2, rhs2)
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(Equals(lhs2, rhs2))
             }
           }
 
         case Plus(lhs, rhs)       =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else Plus(lhs2, rhs2)
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(Plus(lhs2, rhs2))
             }
           }
 
         case Minus(lhs, rhs)      =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else Minus(lhs2, rhs2)
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(Minus(lhs2, rhs2))
             }
           }
 
@@ -432,8 +429,8 @@ object Phases {
           anfize(cond) { cond2 =>
             anfize(thenp) { thenp2 =>
               anfize(elsep) { elsep2 =>
-                if (cond.eq(cond2) && thenp.eq(thenp2) && elsep.eq(elsep2)) recur(tree)
-                else Mux(cond2, thenp2, elsep2)
+                if (cond.eq(cond2) && thenp.eq(thenp2) && elsep.eq(elsep2)) cont(tree)
+                else cont(Mux(cond2, thenp2, elsep2))
               }
             }
           }
@@ -441,14 +438,17 @@ object Phases {
         case Shift(lhs, rhs, isLeft)   =>
           anfize(lhs) { lhs2 =>
             anfize(rhs) { rhs2 =>
-              if (lhs.eq(lhs2) && rhs.eq(rhs2)) recur(tree)
-              else Shift(lhs2, rhs2, isLeft)
+              if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
+              else cont(Shift(lhs2, rhs2, isLeft))
             }
           }
-      }
-    }
 
-    fix(sig)(anfMap.apply[T])
+        case _ =>
+          ??? // impossible
+      }
+
+    // fix(sig)(anfMap.apply[T])
+    recur(sig)(identity)
   }
 
   /** Inlining
