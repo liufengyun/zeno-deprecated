@@ -239,6 +239,8 @@ object Phases {
    *  vec[6..3][2]           ~~>     vec[5]
    *  vec ++ []              ~~>     vec
    *  [] ++ vec              ~~>     vec
+   *  (vec1 ~ vec2).left     ~~>     vec1
+   *  (vec1 ~ vec2).right    ~~>     vec2
    */
   def optsel[T <: Type](sig: Signal[T]): Signal[T] = {
     val rangeOptMap = new TreeMap {
@@ -276,6 +278,10 @@ object Phases {
         case Concat(lhs, rhs) if lhs.width == 0 => rhs.as[T]
 
         case Concat(lhs, rhs) if rhs.width == 0 => lhs.as[T]
+
+        case Left(Par(lhs, rhs)) => lhs
+
+        case Right(Par(lhs, rhs)) => rhs
 
         case _ =>
           recur(tree)
@@ -453,7 +459,9 @@ object Phases {
     def usageCount[T <: Type](sym: Symbol, tree: Signal[T]): Int = {
       val counter = new TreeAccumulator[Int] {
         def apply[T  <: Type](x: Int, tree: Signal[T]): Int = tree match {
-          case Var(sym1, _) if sym.eq(sym1) => x + 1
+          case Var(sym1, _) =>
+            if (sym.eq(sym1)) x + 1
+            else x
           case _ => recur(x, tree)
         }
       }
