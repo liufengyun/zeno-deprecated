@@ -1,6 +1,9 @@
 package nand
 package util
 
+import core._
+import Types._, Trees._, Values._
+
 object Printing {
   def show[T <: Type](sig: Signal[T]): String = {
     var indent = 0
@@ -33,7 +36,7 @@ object Printing {
           "Vec()"
 
         case VecLit(bits)   =>
-          if (bits.width <= 4) bits.map(_.toString).mkString
+          if (bits.size <= 4) bits.map(_.toString).mkString
           else toHex(bits)
 
         case Concat(vec1, vec2) =>
@@ -96,7 +99,7 @@ object Printing {
   def show(value: Value): String = value match {
     case PairV(l, r)     => show(l) + " ~ " + show(r)
     case VecV(bits)      =>
-      if (bits.width <= 4) bits.map(_.toString).mkString else toHex(bits)
+      if (bits.size <= 4) bits.map(_.toString).mkString else toHex(bits)
   }
 
   def toHex(bits: List[0 | 1]): String = {
@@ -109,7 +112,7 @@ object Printing {
       sum += bit * base
       base *= 2
 
-      if (base > 8 || count == bits.width) {
+      if (base > 8 || count == bits.size) {
         base = 1
 
         if(sum < 10) sb.insert(0, sum.toString)

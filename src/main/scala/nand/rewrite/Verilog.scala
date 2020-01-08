@@ -1,8 +1,12 @@
 package nand
 package rewrite
 
+import nand.lang._
+
 import core._
-import Types._, Trees._
+import Types._, Trees._, Values._
+
+import Phases._
 
 object Verilog {
   def emit[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
@@ -54,7 +58,7 @@ object Verilog {
 
     def bits2Verilog(bits: List[Int]): String = {
       val bin = bits.map(_.toString).mkString
-      val s = bits.width
+      val s = bits.size
       s"$s'b$bin"
     }
 

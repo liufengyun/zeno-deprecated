@@ -1,8 +1,10 @@
 package nand
 package rewrite
 
+import lang._
+
 import core._
-import Types._, Trees._
+import Types._, Trees._, Values._
 
 object Interpreter {
   def eval[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value] => Value = {
@@ -173,6 +175,7 @@ object Interpreter {
         shift(lhsV, rhsV, isLeft)
     }
 
+    import Phases._
     val normailized = optsel(inlining(anf(flatten(lift(body)))))
 
     normailized match {

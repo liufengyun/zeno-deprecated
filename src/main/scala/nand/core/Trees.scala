@@ -15,6 +15,10 @@ import Types._, Values._
 sealed abstract class Signal[T <: Type] {
   Trees.count += 1
 
+  private[nand] def as[S <: Type]: Signal[S] = {
+    this.asInstanceOf[Signal[S]]
+  }
+
   def tpe: Type
 
   private[nand] def width: Int = this.tpe.asInstanceOf[Vec[_]].width

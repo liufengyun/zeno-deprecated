@@ -1,6 +1,9 @@
 package nand
 package rewrite
 
+import core._
+import Types._, Trees._
+
 abstract class TreeMap {
   def apply[T <: Type](sig: Signal[T]): Signal[T]
 

@@ -1,6 +1,13 @@
 package nand
+package rewrite
 
 import lang._
+
+import core._
+import Trees._, Types._, Values._
+
+// TODO: dotty cannot resolve `Vec`
+import Types.Vec
 
 object Phases {
 
@@ -111,8 +118,8 @@ object Phases {
       val fsm2a @ Fsm(sym2, init2, body2) = flatten(fsm2)
 
       fsm(sym1.name + "_" + sym2.name, init1 ~ init2) { (state: Signal[T]) =>
-        Let(sym1, state.asPair.left,
-          Let(sym2, state.asPair.right,
+        Let(sym1, state.as[T ~ T].left,
+          Let(sym2, state.as[T ~ T].right,
             let("x", body2.as[T ~ (T ~ T)]) { x =>
               ((x.right.left ~ x.left) ~ x.right.right).as[T ~ T]
             }

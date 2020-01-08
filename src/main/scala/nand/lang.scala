@@ -11,9 +11,17 @@ import Printing._
 import rewrite._
 
 object lang {
-  export core.Signal
-  export core.Value
-  export Types.{ Type, Pair, Vec, ~, Bit, Num }
+  type Signal = core.Signal
+  type Value  = core.Value
+
+  type Type   =  Types.Type
+  type Vec    =  Types.Vec
+  type ~      =  Types.~
+  type Num    =  Types.Num
+  type Bit    =  Types.Bit
+
+  // TODO: dotty cannot resolve `Vec`
+  import Types.Vec
 
   def let[S <: Type, T <: Type](name: String, t: Signal[S])(fn: Signal[S] => Signal[T]): Signal[T] = {
     val sym = Symbol.fresh(name)
@@ -39,9 +47,7 @@ object lang {
     }
   }
 
-  def [T <: Type, S <: Type](sig: Signal[T]) as: Signal[S] = {
-    sig.asInstanceOf[Signal[S]]
-  }
+  def [T <: Type](sig: Signal[_]) as: Signal[T] = sig.as[T]
 
   def [T <: Type](sig: Signal[T]) width: Int = sig.tpe match {
     case vec: Vec[_] => vec.width
@@ -49,7 +55,7 @@ object lang {
   }
 
   def fsm[S <: Type, T <: Type](name: String, init: Value)(next: Signal[S] => Signal[S ~ T]): Signal[T] = {
-    val tpInit = typeOf(init)
+    val tpInit = Values.typeOf(init)
     val sym = Symbol.fresh(name)
     val body = next(Var(sym, tpInit))
 
@@ -147,7 +153,7 @@ object lang {
   def [T <: Num](x: Signal[Vec[T]]) === (y: Signal[Vec[T]]): Signal[Bit] = Equals(x, y)
 
   def [N <: Num](vec: Signal[Vec[N]]) width: Int = vec.tpe match {
-    case Vec(width) => width
+    case _: Vec[_] => vec.width
     case _ => throw new Exception("Cannot call .width on a non-vector signal")
   }
 
@@ -200,5 +206,5 @@ object lang {
 
   def [T <: Type](sig: Signal[T]) eval(inputs: Var[_]*): List[Value] => Value = Interpreter.eval(inputs.toList, sig)
 
-  def [T <: Type](sig: Signal[T]) emitVerilog(moduleName: String, inputs: Var[_]*): List[Value] => Value = Verilog.emit(moduleName, inputs.toList, sig)
+  def [T <: Type](sig: Signal[T]) emitVerilog(moduleName: String, inputs: Var[_]*): String = Verilog.emit(moduleName, inputs.toList, sig)
 }
