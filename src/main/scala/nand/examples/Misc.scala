@@ -6,7 +6,7 @@ import lang._
 object Misc {
   def test1(cond: Signal[Bit], x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (!cond | x) & (cond | y)
   def test[T <: Type](cond: Signal[Bit], x: Signal[T], y: Signal[T]): Signal[T] = x.tpe match {
-    case Pair(t1, t2) =>
+    case t1 ~ t2 =>
       type T1 <: Type
       type T2 <: Type
       val x1 = x.as[T1 ~ T2]
@@ -21,6 +21,8 @@ object Misc {
       (0 until n).foldLeft(Vec()) { (acc, i) =>
         test1(cond, x.as[Vec[n.type]](i), y.as[Vec[n.type]](i)) ++ acc
       }.as[T]
+
+    case _ => ??? // impossible
   }
 
   private  def shiftImpl[M <: Num, N <: Num](vec: Signal[Vec[N]], amount: Signal[Vec[M]], isLeft: Boolean): Signal[Vec[N]] = {
@@ -106,7 +108,7 @@ object Misc {
 
   def equalsBit(x: Signal[Bit], y: Signal[Bit]): Signal[Bit] = (x & y) | (!x & !y)
   def equals[T <: Type](x: Signal[T], y: Signal[T]): Signal[Bit] =  x.tpe match {
-    case Pair(t1, t2) =>
+    case t1 ~ t2 =>
       type T1 <: Type
       type T2 <: Type
       val x1 = x.as[T1 ~ T2]
@@ -117,5 +119,7 @@ object Misc {
       (0 until n).map { i =>
         equalsBit(x.as[Vec[n.type]](i), y.as[Vec[n.type]](i))
       }.reduce(_ & _)
+
+    case _ => ??? // impossible
   }
 }

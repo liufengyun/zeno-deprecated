@@ -53,7 +53,7 @@ object Controller {
     val default: Signal[Vec[16]] = 0.W[16]
     (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
       when[Vec[16]] (addr === curAddr.W[addrWidth.type]) {
-        if (curAddr < prog.width) prog(curAddr).W[16]
+        if (curAddr < prog.size) prog(curAddr).W[16]
         else default
       } otherwise {
         acc
@@ -82,9 +82,9 @@ object Controller {
   }
 
   def processor(prog: Array[Int], busIn: Signal[BusIn]): Signal[BusOut ~ Debug] = {
-    assert(prog.width > 0)
+    assert(prog.size > 0)
     var addrW = 1
-    while ((1 << addrW) < prog.width) addrW += 1
+    while ((1 << addrW) < prog.size) addrW += 1
 
     val addrWidth = addrW
     type PC  = Vec[addrWidth.type]
@@ -272,7 +272,7 @@ object Controller {
 
     var inputV: Value = 0.toValue(32)
     while(run) {
-      val output = fsm(inputV :: Nil).asInstanceOf[VecV]
+      val output = fsm(inputV :: Nil).asInstanceOf[core.Values.VecV]
       val hi = output.width - 1
       val addr = output(hi, hi - 7)
       val read = output(hi - 8)

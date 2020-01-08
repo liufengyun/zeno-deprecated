@@ -98,6 +98,7 @@ class TestSuite {
     val circuit = Filter.movingAverage(a)
     val avg = circuit.eval(a)
 
+    import rewrite.Phases._
     // println(show(circuit))
     // println(show(lift(circuit)))
     // println(show(anf(lift(circuit))))
