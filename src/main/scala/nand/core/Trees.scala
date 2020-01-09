@@ -14,6 +14,7 @@ import Types._, Values._
 //       Currently, Dotty crashes with the change.
 sealed abstract class Signal[T <: Type] {
   Trees.count += 1
+  val id = Trees.count
 
   private[nand] def as[S <: Type]: Signal[S] = {
     this.asInstanceOf[Signal[S]]

@@ -8,14 +8,15 @@ object Tracing {
   var depth: Int = 0
   val indentTab = " "
 
-  def trace[T](msg: => String, show: T => String)(op: => T): T = {
+  def trace[T](msg: => String, show: T => String)(op: => T): T = if (enable) {
     traceIndented(s"==> ${msg}?")
+    // displayPrompt()
     depth += 1
     val res = op
     depth -= 1
     traceIndented(s"<== ${msg} = ${show(res)}")
     res
-  }
+  } else op
 
   def trace[T <: Type](msg: => String)(op: => Signal[T]): Signal[T] =
     trace(msg, (x: Signal[T]) => x.show)(op)

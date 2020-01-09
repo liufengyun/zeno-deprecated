@@ -6,6 +6,8 @@ import lang._
 import core._
 import Trees._, Types._, Values._
 
+import util._
+
 object Phases {
 
   def fix[T <: AnyRef](v: T)(fn: T => T): T = {
@@ -288,7 +290,7 @@ object Phases {
     fix(sig)(rangeOptMap.apply[T])
   }
 
-  object ANF {
+  object ANFAtom {
     def unapply[T <: Type](sig: Signal[T]): Boolean = sig match {
       case Var(_, _)        => true
       case At(vec, _)       => unapply(vec)
@@ -304,23 +306,33 @@ object Phases {
 
   /** A Normal Form
    *
-   *  Precondition: all FSMs must be lifted
+   *  Precondition: all FSMs must be flattened
    */
   def anf[T <: Type](sig: Signal[T]): Signal[T] = {
-    def anfize[S <: Type, T <: Type](sig: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
-      sig match {
-        case ANF() =>
-          cont(sig)
+    // the argument to cont should be an ANF atom, it returns an ANF expression
+    def anfize[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
+      tree match {
+        case ANFAtom() =>
+          cont(tree)
 
-        case Let(sym, sig2, body) =>
-          Let(sym, sig2, recur(body)(cont))
+        case Let(sym, sig, body)    =>
+          recur(sig) { sig2 =>
+            val body2 = anfize(body)(cont)
+            if (sig.eq(sig2) && body.eq(body2)) tree.as[T]
+            else Let(sym, sig2, body2)
+          }
 
         case _ =>
-          recur(sig) { sig2 => let(sig2)(cont) }
+          recur(tree) {
+            case sig @ ANFAtom() => cont(sig)
+            case sig             => let(sig)(cont)
+          }
       }
 
-    def recur[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] = tree match {
-        case ANF() =>
+    // the argument to cont should be an ANF molecule, it returns ANF expression
+    def recur[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] = Tracing.trace("ANF " + tree.show) {
+      tree match {
+        case ANFAtom() =>
           cont(tree)
 
         case Pair(lhs, rhs)          =>
@@ -357,14 +369,14 @@ object Phases {
 
         case Let(sym, sig, body)    =>
           anfize(sig) { sig2 =>
-            val body2 = anfize(body)(identity)
+            val body2 = recur(body)(identity)
             if (sig.eq(sig2) && body.eq(body2)) cont(tree)
-            else cont(Let(sym, sig2, body2))
+            else Let(sym, sig2, cont(body2))
           }
 
         case Fsm(sym, init, body)   =>
           anfize(body) { body2 =>
-            if (body.eq(body2)) cont(tree)
+            if (body.eq(body2)) tree.as[T]     // assumption: FSM are lifted
             else Fsm(sym, init, body2.as)
           }
 
@@ -443,6 +455,7 @@ object Phases {
         case _ =>
           ??? // impossible
       }
+    }
 
     // fix(sig)(anfMap.apply[T])
     recur(sig)(identity)
@@ -470,7 +483,7 @@ object Phases {
       val map: IdentityHashMap[Symbol, Signal[_]] = new IdentityHashMap()
 
       def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
-        case Let(sym, rhs @ ANF(), body) =>
+        case Let(sym, rhs @ ANFAtom(), body) =>
           map.put(sym, rhs)
           recur(body)
 
