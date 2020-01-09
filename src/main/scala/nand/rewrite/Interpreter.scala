@@ -175,12 +175,11 @@ object Interpreter {
         shift(lhsV, rhsV, isLeft)
     }
 
-    println("body = " + body.show)
 
     import Phases._
     val normailized = anf(flatten(lift(body)))
     // val normailized = optsel(inlining(anf(flatten(lift(body)))))
-    println("count = " + core.Trees.count)
+    // println("count = " + core.Trees.count)
 
     normailized match {
       case fsm @ Fsm(sym, init, body) =>

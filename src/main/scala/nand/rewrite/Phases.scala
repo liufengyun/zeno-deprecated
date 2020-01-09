@@ -369,16 +369,15 @@ object Phases {
 
         case Let(sym, sig, body)    =>
           anfize(sig) { sig2 =>
-            val body2 = recur(body)(identity)
-            if (sig.eq(sig2) && body.eq(body2)) cont(tree)
-            else Let(sym, sig2, cont(body2))
+            val body2 = recur(body)(cont)
+            if (sig.eq(sig2) && body.eq(body2)) tree.as[T]
+            else Let(sym, sig2, body2)
           }
 
         case Fsm(sym, init, body)   =>
-          anfize(body) { body2 =>
-            if (body.eq(body2)) tree.as[T]     // assumption: FSM are lifted
-            else Fsm(sym, init, body2.as)
-          }
+          val body2 = anfize(body)(identity) // assumption: FSM are lifted
+          if (body.eq(body2)) tree.as[T]
+          else Fsm(sym, init, body2.as)
 
         case And(lhs, rhs)          =>
           anfize(lhs) { lhs2 =>
@@ -478,15 +477,34 @@ object Phases {
       counter(0, tree)
     }
 
-    val inliningMap = new TreeMap {
+    // Why ANF before inlining? And why two phase inlining?
+    //
+    // let x = (a + b) ~ (c + d)
+    // in x.1 + x.2
+
+    val inliningMapAtom = new TreeMap {
       import java.util.IdentityHashMap
       val map: IdentityHashMap[Symbol, Signal[_]] = new IdentityHashMap()
 
       def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
         case Let(sym, rhs @ ANFAtom(), body) =>
-          map.put(sym, rhs)
+          map.put(sym, recur(rhs))
           recur(body)
 
+        case Var(sym, tpe) =>
+          if (map.containsKey(sym)) map.get(sym).as[T]
+          else tree
+
+        case _ =>
+          recur(tree)
+      }
+    }
+
+    val inliningMapMolecule = new TreeMap {
+      import java.util.IdentityHashMap
+      val map: IdentityHashMap[Symbol, Signal[_]] = new IdentityHashMap()
+
+      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
         case Let(sym, rhs, body) =>
           val count = usageCount(sym, body)
           if (count == 0) recur(body) // dead code elimination
@@ -505,6 +523,13 @@ object Phases {
       }
     }
 
-    fix(sig)(inliningMap.apply[T])
+
+    val sig2 = fix(sig) { sig =>
+      optsel(inliningMapAtom(sig))
+    }
+
+    fix(sig2) { sig =>
+      inliningMapMolecule(sig)
+    }
   }
 }
