@@ -19,6 +19,8 @@ object Printing {
       res
     }
 
+    def inParens(content: String): String = "(" + content + ")"
+
     def recur[T <: Type](sig: Signal[T]): String =
       sig match {
         case Pair(lhs, rhs) => recur(lhs) + " ~ " + recur(rhs)
@@ -27,10 +29,10 @@ object Printing {
 
         case Right(pair)   => recur(pair) + ".2"
 
-        case At(vec, i)    => recur(vec) + "(" + i + ")"
+        case At(vec, i)    => recur(vec) + "[" + i + "]"
 
         case Range(vec, to, from) =>
-          recur(vec) + "(" + to + ".." + from + ")"
+          recur(vec) + "[" + to + ".." + from + "]"
 
         case VecLit(Nil)   =>
           "Vec()"
@@ -40,7 +42,7 @@ object Printing {
           else toHex(bits)
 
         case Concat(vec1, vec2) =>
-          recur(vec1) + " ++ " + recur(vec2)
+          inParens { recur(vec1) + " ++ " + recur(vec2) }
 
         case Var(sym, tpe)  =>
           sym.name
@@ -63,14 +65,14 @@ object Printing {
           recur(vec1) + "===" + recur(vec2)
 
         case Plus(vec1, vec2) =>
-          recur(vec1) + " + " + recur(vec2)
+          inParens { recur(vec1) + " + " + recur(vec2) }
 
         case Minus(vec1, vec2) =>
-          recur(vec1) + " - " + recur(vec2)
+          inParens { recur(vec1) + " - " + recur(vec2) }
 
         case Shift(vec, amount, isLeft) =>
           val dir = if (isLeft) " << " else " >> "
-          recur(vec) + dir + recur(amount)
+          inParens { recur(vec) + dir + recur(amount) }
 
         case Mux(cond, vec1, vec2) =>
           indented {
@@ -79,10 +81,10 @@ object Printing {
           }
 
         case And(lhs, rhs)  =>
-          recur(lhs) + " & " + recur(rhs)
+          inParens {  recur(lhs) + " & " + recur(rhs) }
 
         case Or(lhs, rhs)   =>
-          recur(lhs) + " | " + recur(rhs)
+          inParens { recur(lhs) + " | " + recur(rhs) }
 
         case Not(in)        =>
           "!" + recur(in)
