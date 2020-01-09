@@ -245,11 +245,11 @@ object Phases {
     val rangeOptMap = new TreeMap {
       def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
         case At(Concat(lhs, rhs), index) =>
-          if (index < rhs.width) At(rhs, index)
-          else At(rhs, index - rhs.width)
+          if (index < rhs.width) At(recur(rhs), index)
+          else At(recur(lhs), index - rhs.width)
 
         case At(vec, 0) if vec.width == 1 =>
-          vec.as[T]
+          recur(vec).as[T]
 
         case Range(Concat(lhs, rhs), hi, lo) =>
           val rhsWdith = rhs.width
@@ -263,24 +263,24 @@ object Phases {
         case Range(Range(vec, hi1, lo1), hi2, lo2) =>
           val hi = hi2 + lo1
           val lo = lo2 + lo1
-          Range(vec, hi, lo).as[T]
+          Range(recur(vec), hi, lo).as[T]
 
         case Range(vec, hi, lo) =>
-          if (hi == lo) At(vec, hi).as[T]
-          else if (lo == 0 && hi == vec.width - 1) vec.as[T]
-          else tree
+          if (hi == lo) At(recur(vec), hi).as[T]
+          else if (lo == 0 && hi == vec.width - 1) recur(vec).as[T]
+          else recur(tree)
 
         case At(Range(vec, hi, lo), index) =>
           val index2 = index + lo
-          At(vec, index2)
+          At(recur(vec), index2)
 
-        case Concat(lhs, rhs) if lhs.width == 0 => rhs.as[T]
+        case Concat(lhs, rhs) if lhs.width == 0 => recur(rhs).as[T]
 
-        case Concat(lhs, rhs) if rhs.width == 0 => lhs.as[T]
+        case Concat(lhs, rhs) if rhs.width == 0 => recur(lhs).as[T]
 
-        case Left(Pair(lhs, rhs)) => lhs
+        case Left(Pair(lhs, rhs)) => recur(lhs)
 
-        case Right(Pair(lhs, rhs)) => rhs
+        case Right(Pair(lhs, rhs)) => recur(rhs)
 
         case _ =>
           recur(tree)
