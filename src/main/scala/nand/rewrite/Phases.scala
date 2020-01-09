@@ -488,8 +488,8 @@ object Phases {
 
       def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
         case Let(sym, rhs @ ANFAtom(), body) =>
-          map.put(sym, recur(rhs))
-          recur(body)
+          map.put(sym, this(rhs))
+          this(body)
 
         case Var(sym, tpe) =>
           if (map.containsKey(sym)) map.get(sym).as[T]
@@ -507,10 +507,10 @@ object Phases {
       def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
         case Let(sym, rhs, body) =>
           val count = usageCount(sym, body)
-          if (count == 0) recur(body) // dead code elimination
+          if (count == 0) this(body) // dead code elimination
           else if (count == 1) {
-            map.put(sym, rhs)
-            recur(body)
+            map.put(sym, this(rhs))
+            this(body)
           }
           else recur(tree)
 
