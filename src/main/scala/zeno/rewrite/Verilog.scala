@@ -10,7 +10,7 @@ import Phases._
 
 object Verilog {
   def emit[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
-    val normailized = inlining(detuple(inlining(anf(flatten(lift(sig))))))
+    val normailized = inlining(detuple(inlining(anf(optsel(flatten(lift(sig)))))))
 
     import scala.collection.mutable.ListBuffer
 

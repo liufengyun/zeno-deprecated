@@ -177,9 +177,9 @@ object Interpreter {
 
 
     import Phases._
-    val normailized = anf(flatten(lift(body)))
-    // val normailized = optsel(inlining(anf(flatten(lift(body)))))
-    // println("count = " + core.Trees.count)
+    val normailized = inlining(anf(optsel(flatten(lift(body)))))
+    // val normailized = inlining(anf(flatten(lift(body))))
+    // println("after = " + normailized.show)
 
     normailized match {
       case fsm @ Fsm(sym, init, body) =>

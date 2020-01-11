@@ -310,136 +310,131 @@ object Phases {
   /** A Normal Form
    *
    *  Precondition: all FSMs must be flattened
+   *
+   *  A ::= x | A[i] | A[j..i] | A ~ A | A ++ A | A.1 | A.2 | 010
+   *  M ::= A | A + A | A - A | A << A | A >> A | A & A\/A | A | !A | A == A | if (A) A else A
+   *  E ::= A | let x = M in E | fsm { v | s => E }
    */
   def anf[T <: Type](sig: Signal[T]): Signal[T] = {
     // the argument to cont should be an ANF atom, it returns an ANF expression
-    def anfize[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
-      tree match {
+    def atomize[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
+      moleculize(tree) {
         case ANFAtom() =>
           cont(tree)
 
-        case Let(sym, sig, body)    =>
-          recur(sig) { sig2 =>
-            val body2 = anfize(body)(cont)
-            if (sig.eq(sig2) && body.eq(body2)) tree.as[T]
-            else Let(sym, sig2, body2)
-          }
-
-        case _ =>
-          recur(tree) {
-            case sig @ ANFAtom() => cont(sig)
-            case sig             => let(sig)(cont)
-          }
+        case sig =>
+          let(sig)(cont)
       }
 
+
     // the argument to cont should be an ANF molecule, it returns ANF expression
-    def recur[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] = Tracing.trace("ANF " + tree.show) {
+    def moleculize[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] = Tracing.trace("ANF " + tree.show) {
       tree match {
         case ANFAtom() =>
           cont(tree)
 
         case Pair(lhs, rhs)          =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(Pair(lhs2, rhs2))
             }
           }
 
         case Left(pair)             =>
-          anfize(pair) { pair2 =>
+          atomize(pair) { pair2 =>
             if (pair.eq(pair2)) cont(tree)
             else cont(Left(pair2))
           }
 
         case Right(pair)            =>
-          anfize(pair) { pair2 =>
+          atomize(pair) { pair2 =>
             if (pair.eq(pair2)) cont(tree)
             else cont(Right(pair2))
           }
 
         case At(vec, index)         =>
-          anfize(vec) { vec2 =>
+          atomize(vec) { vec2 =>
             if (vec.eq(vec2)) cont(tree)
             else cont(At(vec2, index))
           }
 
         case Range(vec, to, from)   =>
-          anfize(vec) { vec2 =>
+          atomize(vec) { vec2 =>
             if (vec.eq(vec2)) cont(tree)
             else cont(Range(vec2, to, from).as[S])
           }
 
         case Let(sym, sig, body)    =>
-          anfize(sig) { sig2 =>
-            val body2 = recur(body)(cont)
+          moleculize(sig) { sig2 =>
+            val body2 = moleculize(body)(cont)
             if (sig.eq(sig2) && body.eq(body2)) tree.as[T]
             else Let(sym, sig2, body2)
           }
 
         case Fsm(sym, init, body)   =>
-          val body2 = anfize(body)(identity) // assumption: FSM are lifted
+          val body2 = moleculize(body)(identity) // assumption: FSM are lifted
           if (body.eq(body2)) tree.as[T]
           else Fsm(sym, init, body2.as)
 
         case And(lhs, rhs)          =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(And(lhs2, rhs2))
             }
           }
 
         case Or(lhs, rhs)           =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(Or(lhs2, rhs2))
             }
           }
 
         case Not(in)                =>
-          anfize(in) { in2 =>
+          atomize(in) { in2 =>
             if (in.eq(in2)) cont(tree)
             else cont(Not(in2))
           }
 
         case Concat(lhs, rhs)     =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(Concat(lhs2, rhs2).as[S])
             }
           }
 
         case Equals(lhs, rhs)     =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(Equals(lhs2, rhs2))
             }
           }
 
         case Plus(lhs, rhs)       =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(Plus(lhs2, rhs2))
             }
           }
 
         case Minus(lhs, rhs)      =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(Minus(lhs2, rhs2))
             }
           }
 
         case Mux(cond, thenp, elsep)  =>
-          anfize(cond) { cond2 =>
-            anfize(thenp) { thenp2 =>
-              anfize(elsep) { elsep2 =>
+          atomize(cond) { cond2 =>
+            atomize(thenp) { thenp2 =>
+              atomize(elsep) { elsep2 =>
                 if (cond.eq(cond2) && thenp.eq(thenp2) && elsep.eq(elsep2)) cont(tree)
                 else cont(Mux(cond2, thenp2, elsep2))
               }
@@ -447,8 +442,8 @@ object Phases {
           }
 
         case Shift(lhs, rhs, isLeft)   =>
-          anfize(lhs) { lhs2 =>
-            anfize(rhs) { rhs2 =>
+          atomize(lhs) { lhs2 =>
+            atomize(rhs) { rhs2 =>
               if (lhs.eq(lhs2) && rhs.eq(rhs2)) cont(tree)
               else cont(Shift(lhs2, rhs2, isLeft))
             }
@@ -459,8 +454,8 @@ object Phases {
       }
     }
 
-    // fix(sig)(anfMap.apply[T])
-    recur(sig)(identity)
+    // fix(sig)(sig => moleculize(sig)(identity))
+    moleculize(sig)(identity)
   }
 
   /** Inlining
@@ -534,5 +529,13 @@ object Phases {
     fix(sig2) { sig =>
       inliningMapMolecule(sig)
     }
+  }
+
+  def size[T <: Type](sig: Signal[T]): Int = {
+    val counter = new TreeAccumulator[Int] {
+      def apply[T <: Type](x: Int, sig: Signal[T]): Int =
+        recur(x + 1, sig)
+    }
+    counter(0, sig)
   }
 }
