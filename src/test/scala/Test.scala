@@ -1,4 +1,4 @@
-package nand
+package zeno
 
 import org.junit.Test
 import org.junit.Assert._

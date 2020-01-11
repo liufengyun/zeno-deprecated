@@ -1,4 +1,4 @@
-package nand
+package zeno
 package rewrite
 
 import lang._
@@ -8,8 +8,11 @@ import Trees._, Types._, Values._
 
 import util._
 
+import scala.annotation.tailrec
+
 object Phases {
 
+  @tailrec
   def fix[T <: AnyRef](v: T)(fn: T => T): T = {
     val current = fn(v)
     if (v `ne` current) fix(current)(fn)

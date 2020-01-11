@@ -1,4 +1,4 @@
-package nand
+package zeno
 package core
 
 import Types._, Values._
@@ -16,16 +16,16 @@ sealed abstract class Signal[T <: Type] {
   Trees.count += 1
   val id = Trees.count
 
-  private[nand] def as[S <: Type]: Signal[S] = {
+  private[zeno] def as[S <: Type]: Signal[S] = {
     this.asInstanceOf[Signal[S]]
   }
 
   def tpe: Type
 
-  private[nand] def width: Int = this.tpe.asInstanceOf[Vec[_]].width
+  private[zeno] def width: Int = this.tpe.asInstanceOf[Vec[_]].width
 }
 
-private[nand] object Trees {
+private[zeno] object Trees {
   // symbol for bindings
   case class Symbol(name: String)
 

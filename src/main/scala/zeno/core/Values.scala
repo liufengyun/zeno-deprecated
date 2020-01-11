@@ -1,11 +1,11 @@
-package nand
+package zeno
 package core
 
 import Types._
 
 sealed abstract class Value
 
-private[nand] object Values {
+private[zeno] object Values {
   case class PairV(lhs: Value, rhs: Value) extends Value
 
   case class VecV(bits: List[0 | 1]) extends Value {

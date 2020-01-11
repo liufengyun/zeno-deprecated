@@ -1,7 +1,7 @@
-package nand
+package zeno
 package rewrite
 
-import nand.lang._
+import zeno.lang._
 
 import core._
 import Types._, Trees._, Values._

@@ -1,4 +1,4 @@
-package nand
+package zeno
 package examples
 
 import lang._

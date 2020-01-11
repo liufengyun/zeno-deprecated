@@ -1,4 +1,4 @@
-package nand
+package zeno
 package examples
 
 import lang._
@@ -255,7 +255,7 @@ object Controller {
   }
 
   def testDetupled(prog: String): String = {
-    import nand.rewrite.Phases
+    import zeno.rewrite.Phases
 
     val busIn = input[BusIn]("busIn")
     val instructions = Assembler.assemble(prog)

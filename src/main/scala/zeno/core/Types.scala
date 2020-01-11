@@ -1,4 +1,4 @@
-package nand
+package zeno
 package core
 
 import scala.compiletime._
