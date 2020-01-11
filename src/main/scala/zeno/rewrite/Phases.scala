@@ -313,7 +313,8 @@ object Phases {
    *
    *  A ::= x | A[i] | A[j..i] | A ~ A | A ++ A | A.1 | A.2 | 010
    *  M ::= A | A + A | A - A | A << A | A >> A | A & A\/A | A | !A | A == A | if (A) A else A
-   *  E ::= A | let x = M in E | fsm { v | s => E }
+   *  E ::= M | let x = M in E
+   *  N ::= E | fsm { v | s => N }
    */
   def anf[T <: Type](sig: Signal[T]): Signal[T] = {
     // the argument to cont should be an ANF atom, it returns an ANF expression
