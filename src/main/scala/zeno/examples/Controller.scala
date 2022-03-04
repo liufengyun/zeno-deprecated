@@ -87,7 +87,7 @@ object Controller {
           def next(
             pc: Sig[PC] = pcNext,
             acc: Sig[ACC] = acc,
-            mode: Sig[Bit] = 0.W[1],
+            mode: Sig[Bit] = 0,
             out: Sig[BusOut] = defaultBusOut,
             exit: Boolean = false
           ): Sig[(PC ~ ACC ~ Bit) ~ (BusOut ~ Debug)] = {
@@ -176,22 +176,22 @@ object Controller {
               }
 
             } .when (opcode === ADD.W[8]) {
-              next(out = loadBusOut, mode = 1.W)
+              next(out = loadBusOut, mode = 1)
 
             } .when (opcode === SUB.W[8]) {
-              next(out = loadBusOut, mode = 1.W)
+              next(out = loadBusOut, mode = 1)
 
             } .when (opcode === LD.W[8]) {
-              next(out = loadBusOut, mode = 1.W)
+              next(out = loadBusOut, mode = 1)
 
             } .when (opcode === AND.W[8]) {
-              next(out = loadBusOut, mode = 1.W)
+              next(out = loadBusOut, mode = 1)
 
             } .when (opcode === OR.W[8]) {
-              next(out = loadBusOut, mode = 1.W)
+              next(out = loadBusOut, mode = 1)
 
             } .when (opcode === XOR.W[8]) {
-              next(out = loadBusOut, mode = 1.W)
+              next(out = loadBusOut, mode = 1)
 
             } .when (opcode === EXIT.W[8]) {
               next(exit = true)
