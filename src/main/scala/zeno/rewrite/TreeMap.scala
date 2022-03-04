@@ -5,9 +5,9 @@ import core._
 import Types._, Trees._
 
 abstract class TreeMap {
-  def apply[T <: Type](sig: Signal[T]): Signal[T]
+  def apply[T <: Type](sig: Sig[T]): Sig[T]
 
-  def recur[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+  def recur[T <: Type](tree: Sig[T]): Sig[T] = tree match {
     case Pair(lhs, rhs)          =>
       val lhs2 = this(lhs)
       val rhs2 = this(rhs)

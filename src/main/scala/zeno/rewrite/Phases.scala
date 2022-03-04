@@ -19,9 +19,9 @@ object Phases {
     else current
   }
 
-  def lift[T <: Type](sig: Signal[T]): Signal[T] = {
+  def lift[T <: Type](sig: Sig[T]): Sig[T] = {
     val liftMap = new TreeMap {
-      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+      def apply[T <: Type](tree: Sig[T]): Sig[T] = tree match {
         case And(lhs, Fsm(sym, init, body)) =>
           Fsm(sym, init, let("x", body) { x => x.left ~ (lhs & x.right) } )
 
@@ -115,11 +115,11 @@ object Phases {
    *
    *  It must happen before detupling.
    */
-  def flatten[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+  def flatten[T <: Type](tree: Sig[T]): Sig[T] = tree match {
     case Fsm(sym1, init1, fsm2 @ Fsm(_, _, _)) =>
       val fsm2a @ Fsm(sym2, init2, body2) = flatten(fsm2)
 
-      fsm(sym1.name + "_" + sym2.name, init1 ~ init2) { (state: Signal[T]) =>
+      fsm(sym1.name + "_" + sym2.name, init1 ~ init2) { (state: Sig[T]) =>
         Let(sym1, state.as[T ~ T].left,
           Let(sym2, state.as[T ~ T].right,
             let("x", body2.as[T ~ (T ~ T)]) { x =>
@@ -133,7 +133,7 @@ object Phases {
     case _ => tree
   }
 
-  def detuple[T <: Type, U <: Num](sig: Signal[T]): Signal[Vec[U]] = {
+  def detuple[T <: Type, U <: Num](sig: Sig[T]): Sig[Vec[U]] = {
     def toVecType(tp: Type): Vec[_] = tp match {
       case PairT(lhs, rhs) =>
         (toVecType(lhs), toVecType(rhs)) match {
@@ -157,7 +157,7 @@ object Phases {
     }
 
 
-    def recur[T <: Type, U <: Num](sig: Signal[T]): Signal[Vec[U]] = sig match {
+    def recur[T <: Type, U <: Num](sig: Sig[T]): Sig[Vec[U]] = sig match {
       case Pair(lhs, rhs)          =>
         (recur(lhs) ++ recur(rhs)).as[Vec[U]]
 
@@ -244,9 +244,9 @@ object Phases {
    *  (vec1 ~ vec2).left     ~~>     vec1
    *  (vec1 ~ vec2).right    ~~>     vec2
    */
-  def optsel[T <: Type](sig: Signal[T]): Signal[T] = {
+  def optsel[T <: Type](sig: Sig[T]): Sig[T] = {
     val rangeOptMap = new TreeMap {
-      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+      def apply[T <: Type](tree: Sig[T]): Sig[T] = tree match {
         case At(Concat(lhs, rhs), index) =>
           if (index < rhs.width) At(recur(rhs), index)
           else At(recur(lhs), index - rhs.width)
@@ -294,7 +294,7 @@ object Phases {
   }
 
   object ANFAtom {
-    def unapply[T <: Type](sig: Signal[T]): Boolean = sig match {
+    def unapply[T <: Type](sig: Sig[T]): Boolean = sig match {
       case Var(_, _)        => true
       case At(vec, _)       => unapply(vec)
       case Range(vec, _, _) => unapply(vec)
@@ -316,9 +316,9 @@ object Phases {
    *  E ::= M | let x = M in E
    *  N ::= E | fsm { v | s => N }
    */
-  def anf[T <: Type](sig: Signal[T]): Signal[T] = {
+  def anf[T <: Type](sig: Sig[T]): Sig[T] = {
     // the argument to cont should be an ANF atom, it returns an ANF expression
-    def atomize[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] =
+    def atomize[S <: Type, T <: Type](tree: Sig[S])(cont: Sig[S] => Sig[T]): Sig[T] =
       moleculize(tree) {
         case ANFAtom() =>
           cont(tree)
@@ -329,7 +329,7 @@ object Phases {
 
 
     // the argument to cont should be an ANF molecule, it returns ANF expression
-    def moleculize[S <: Type, T <: Type](tree: Signal[S])(cont: Signal[S] => Signal[T]): Signal[T] = Tracing.trace("ANF " + tree.show) {
+    def moleculize[S <: Type, T <: Type](tree: Sig[S])(cont: Sig[S] => Sig[T]): Sig[T] = Tracing.trace("ANF " + tree.show) {
       tree match {
         case ANFAtom() =>
           cont(tree)
@@ -463,10 +463,10 @@ object Phases {
    *
    *  Precondition: tree must be ANF
    */
-  def inlining[T <: Type](sig: Signal[T]): Signal[T] = {
-    def usageCount[T <: Type](sym: Symbol, tree: Signal[T]): Int = {
+  def inlining[T <: Type](sig: Sig[T]): Sig[T] = {
+    def usageCount[T <: Type](sym: Symbol, tree: Sig[T]): Int = {
       val counter = new TreeAccumulator[Int] {
-        def apply[T  <: Type](x: Int, tree: Signal[T]): Int = tree match {
+        def apply[T  <: Type](x: Int, tree: Sig[T]): Int = tree match {
           case Var(sym1, _) =>
             if (sym.eq(sym1)) x + 1
             else x
@@ -483,9 +483,9 @@ object Phases {
 
     val inliningMapAtom = new TreeMap {
       import java.util.IdentityHashMap
-      val map: IdentityHashMap[Symbol, Signal[_]] = new IdentityHashMap()
+      val map: IdentityHashMap[Symbol, Sig[_]] = new IdentityHashMap()
 
-      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+      def apply[T <: Type](tree: Sig[T]): Sig[T] = tree match {
         case Let(sym, rhs @ ANFAtom(), body) =>
           map.put(sym, this(rhs))
           this(body)
@@ -501,9 +501,9 @@ object Phases {
 
     val inliningMapMolecule = new TreeMap {
       import java.util.IdentityHashMap
-      val map: IdentityHashMap[Symbol, Signal[_]] = new IdentityHashMap()
+      val map: IdentityHashMap[Symbol, Sig[_]] = new IdentityHashMap()
 
-      def apply[T <: Type](tree: Signal[T]): Signal[T] = tree match {
+      def apply[T <: Type](tree: Sig[T]): Sig[T] = tree match {
         case Let(sym, rhs, body) =>
           val count = usageCount(sym, body)
           if (count == 0) this(body) // dead code elimination
@@ -532,9 +532,9 @@ object Phases {
     }
   }
 
-  def size[T <: Type](sig: Signal[T]): Int = {
+  def size[T <: Type](sig: Sig[T]): Int = {
     val counter = new TreeAccumulator[Int] {
-      def apply[T <: Type](x: Int, sig: Signal[T]): Int =
+      def apply[T <: Type](x: Int, sig: Sig[T]): Int =
         recur(x + 1, sig)
     }
     counter(0, sig)

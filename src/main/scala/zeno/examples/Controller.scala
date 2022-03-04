@@ -49,8 +49,8 @@ object Controller {
   type ACC   = Vec[32]
   type INSTR = Vec[16]
 
-  def instrMemory(addrWidth: Int, prog: Array[Int], addr: Signal[Vec[addrWidth.type]]): Signal[Vec[16]] = {
-    val default: Signal[Vec[16]] = 0.W[16]
+  def instrMemory(addrWidth: Int, prog: Array[Int], addr: Sig[Vec[addrWidth.type]]): Sig[Vec[16]] = {
+    val default: Sig[Vec[16]] = 0.W[16]
     (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
       when[Vec[16]] (addr === curAddr.W[addrWidth.type]) {
         if (curAddr < prog.size) prog(curAddr).W[16]
@@ -61,7 +61,7 @@ object Controller {
     }
   }
 
-  def processor(prog: Array[Int], busIn: Signal[BusIn]): Signal[BusOut ~ Debug] = {
+  def processor(prog: Array[Int], busIn: Sig[BusIn]): Sig[BusOut ~ Debug] = {
     assert(prog.size > 0)
     var addrW = 1
     while ((1 << addrW) < prog.size) addrW += 1
@@ -73,9 +73,9 @@ object Controller {
     val acc0: Value  = 0.toValue(32)
     val mode0: Value = 0.toValue(1)
 
-    val defaultBusOut: Signal[BusOut] = 0.W[8] ~ 0 ~ 0 ~ 0.W[32]
+    val defaultBusOut: Sig[BusOut] = 0.W[8] ~ 0 ~ 0 ~ 0.W[32]
 
-    fsm("processor", pc0 ~ acc0 ~ mode0) { (state: Signal[PC ~ ACC ~ Bit]) =>
+    fsm("processor", pc0 ~ acc0 ~ mode0) { (state: Sig[PC ~ ACC ~ Bit]) =>
       val pc ~ acc ~ mode = state
 
       let("pcNext", pc + 1.W[addrWidth.type]) { pcNext =>
@@ -85,12 +85,12 @@ object Controller {
           val opcode  = instr(15, 8).as[Vec[8]]
 
           def next(
-            pc: Signal[PC] = pcNext,
-            acc: Signal[ACC] = acc,
-            mode: Signal[Bit] = 0.W[1],
-            out: Signal[BusOut] = defaultBusOut,
+            pc: Sig[PC] = pcNext,
+            acc: Sig[ACC] = acc,
+            mode: Sig[Bit] = 0.W[1],
+            out: Sig[BusOut] = defaultBusOut,
             exit: Boolean = false
-          ): Signal[(PC ~ ACC ~ Bit) ~ (BusOut ~ Debug)] = {
+          ): Sig[(PC ~ ACC ~ Bit) ~ (BusOut ~ Debug)] = {
             val debug = acc ~ (pc.as[Vec[_]]) ~ instr ~ exit
             (pc ~ acc ~ mode) ~ (out ~ debug)
           }
@@ -119,7 +119,7 @@ object Controller {
             val busAddr = instr(7, 0).as[Vec[8]]
             val shiftOperand = instr(3, 0).as[Vec[4]]
 
-            val loadBusOut: Signal[BusOut] = busAddr ~ 1 ~ 0 ~ 0.W[32]
+            val loadBusOut: Sig[BusOut] = busAddr ~ 1 ~ 0 ~ 0.W[32]
 
             when (opcode === ADDI.W[8]) {
               val acc2 = acc + operand
@@ -133,7 +133,7 @@ object Controller {
               next(acc = operand)
 
             } .when (opcode === ST.W[8]) {
-              val busOut: Signal[BusOut] = busAddr ~ 0 ~ 1 ~ acc
+              val busOut: Sig[BusOut] = busAddr ~ 0 ~ 1 ~ acc
               next(out = busOut)
 
             } .when (opcode === ANDI.W[8]) {

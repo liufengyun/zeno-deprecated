@@ -18,8 +18,8 @@ object Tracing {
     res
   } else op
 
-  def trace[T <: Type](msg: => String)(op: => Signal[T]): Signal[T] =
-    trace(msg, (x: Signal[T]) => x.show)(op)
+  def trace[T <: Type](msg: => String)(op: => Sig[T]): Sig[T] =
+    trace(msg, (x: Sig[T]) => x.show)(op)
 
   def traceOp(msg: => String)(op: => Unit): Unit = {
     traceIndented(s"==> ${msg}")

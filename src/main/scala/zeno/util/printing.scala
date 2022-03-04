@@ -5,7 +5,7 @@ import core._
 import Types._, Trees._, Values._
 
 object Printing {
-  def show[T <: Type](sig: Signal[T]): String = {
+  def show[T <: Type](sig: Sig[T]): String = {
     var indent = 0
 
     def padding: String = "\n" + ("  " * indent)
@@ -21,7 +21,7 @@ object Printing {
 
     def inParens(content: String): String = "(" + content + ")"
 
-    def recur[T <: Type](sig: Signal[T]): String =
+    def recur[T <: Type](sig: Sig[T]): String =
       sig match {
         case Pair(lhs, rhs) => recur(lhs) + " ~ " + recur(rhs)
 

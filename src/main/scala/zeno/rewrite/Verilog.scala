@@ -9,7 +9,7 @@ import Types._, Trees._, Values._
 import Phases._
 
 object Verilog {
-  def emit[T <: Type](moduleName: String, input: List[Var[_]], sig: Signal[T]): String = {
+  def emit[T <: Type](moduleName: String, input: List[Var[_]], sig: Sig[T]): String = {
     val normailized = inlining(detuple(inlining(anf(optsel(flatten(lift(sig)))))))
 
     import scala.collection.mutable.ListBuffer
@@ -62,7 +62,7 @@ object Verilog {
       s"$s'b$bin"
     }
 
-    def recur[T <: Type](sig: Signal[T]): String = { /* println(show(sig)); */ sig} match {
+    def recur[T <: Type](sig: Sig[T]): String = { /* println(show(sig)); */ sig} match {
       case At(vec, index)         =>
         val vec1 = recur(vec)
         s"$vec1[$index]"

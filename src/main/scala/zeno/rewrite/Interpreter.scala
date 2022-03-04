@@ -7,7 +7,7 @@ import core._
 import Types._, Trees._, Values._
 
 object Interpreter {
-  def eval[T <: Type](input: List[Var[_]], body: Signal[T]): List[Value] => Value = {
+  def eval[T <: Type](input: List[Var[_]], body: Sig[T]): List[Value] => Value = {
     def and(lhs: Value, rhs: Value): Value = (lhs, rhs) match {
       case (lhs1 ~ rhs1, lhs2 ~ rhs2) =>
         (and(lhs1, lhs2) ~ and(rhs1, rhs2))
@@ -96,7 +96,7 @@ object Interpreter {
       VecV(res.asInstanceOf[List[0 | 1]])
     }
 
-    def recur[T <: Type](sig: Signal[T])(implicit env: Map[Symbol, Value]): Value = { /* println(show(sig)); */ sig} match {
+    def recur[T <: Type](sig: Sig[T])(implicit env: Map[Symbol, Value]): Value = { /* println(show(sig)); */ sig} match {
       case Pair(lhs, rhs)          =>
         recur(lhs) ~ recur(rhs)
 
