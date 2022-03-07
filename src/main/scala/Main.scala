@@ -1,6 +1,6 @@
 package zeno
 
-import examples.Controller
+import examples.controller.Controller
 
 object Main {
   def main(args: Array[String]): Unit = {

@@ -1,5 +1,4 @@
-package zeno
-package core
+package zeno.core
 
 import scala.compiletime._
 

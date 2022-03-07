@@ -1,7 +1,7 @@
-package zeno
-package examples
+package zeno.examples.controller
 
-import lang._
+import zeno.lang._
+import zeno.core.Values
 
 import scala.language.implicitConversions
 
@@ -269,7 +269,7 @@ object Controller {
 
     var inputV: Value = 0.toValue(32)
     while(run) {
-      val output = fsm(inputV :: Nil).asInstanceOf[core.Values.VecV]
+      val output = fsm(inputV :: Nil).asInstanceOf[Values.VecV]
       val hi = output.width - 1
       val addr = output(hi, hi - 7)
       val read = output(hi - 8)
