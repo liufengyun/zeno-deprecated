@@ -34,7 +34,7 @@ object Misc {
       if (index >= m) toShift
       else {
         val bitsToShift = 1 << index
-        val padding = 0.W[bitsToShift.type]
+        val padding = 0.toSig(bitsToShift)
         val shifted: Sig[Vec[N]] =
           if (isLeft) (toShift(bitsToShift, n - 1) ++ padding).as[Vec[N]]
           else (padding ++ toShift(0, n - bitsToShift - 1)).as[Vec[N]]

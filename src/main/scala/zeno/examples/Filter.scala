@@ -14,7 +14,7 @@ object Filter {
   def movingAverage(in: Sig[Vec[8]]): Sig[Vec[8]] = {
     let(delay(in, 0.toValue(8))) { z1 =>
       let(delay(z1, 0.toValue(8))) { z2 =>
-        (z2 + (z1 << 1) + in) >> 2.W[2]
+        (z2 + (z1 << 1) + in) >> 2.toSig(2)
       }
     }
   }

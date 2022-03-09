@@ -90,25 +90,31 @@ object lang {
 
   /** Int -> Bits, take the least significant N bits */
   extension (n: Int)
-    def W[N <: Num](using M: ValueOf[N]): Sig[Vec[N]] = {
-      val N = M.value.asInstanceOf[Int]
-      val bits = (0 until N).foldLeft(Nil: List[0|1]) { (acc, i) =>
+    def toSig(width: Int): Sig[Vec[width.type]] =
+      val bits = (0 until width).foldLeft(Nil: List[0|1]) { (acc, i) =>
         val bit: 0 | 1 = if (n & (1 << i)) == 0 then 0 else 1
         bit :: acc
       }
       VecLit(bits)
-    }
 
   // ---------------- bit vector operations --------------------
 
-  extension [M <: Num](vec: Sig[Vec[M]])
+  extension [M <: Num](sig: Sig[Vec[M]])
     def <<[N <: Num](amount: Sig[Vec[N]]): Sig[Vec[M]] =
-      Shift(vec, amount, isLeft = true)
+      Shift(sig, amount, isLeft = true)
 
     def >>[N <: Num](amount: Sig[Vec[N]]): Sig[Vec[M]] =
-      Shift(vec, amount, isLeft = false)
+      Shift(sig, amount, isLeft = false)
 
-    def apply(index: Int): Sig[Bit] = At(vec, index)
+    def apply(index: Int): Sig[Bit] = At(sig, index)
+
+    def apply[U <: Num](to: Int, from: Int): Sig[Vec[U]] = Range[M, U](sig, to, from)
+
+    def signExtend[N <: Num, U <: Num](n: Int): Sig[Vec[U]] =
+      val hibit = sig.width - 1
+      val paddingSize = n - sig.width
+      when(sig(hibit)) { VecLit(List.fill(paddingSize)(1)) ++ sig }
+      .otherwise { 0.toSig(paddingSize) ++ sig }
 
   extension [N <: Num](lhs: Sig[Vec[N]])
     def + (rhs: Sig[Vec[N]]): Sig[Vec[N]] =
@@ -117,14 +123,10 @@ object lang {
     def - (rhs: Sig[Vec[N]]): Sig[Vec[N]] =
       Minus(lhs, rhs)
 
+    def === (rhs: Sig[Vec[N]]): Sig[Bit] = Equals(lhs, rhs)
+
   extension [M <: Num](lhs: Sig[Vec[M]])
     def ++ [N <: Num, U <: Num](rhs: Sig[Vec[N]]): Sig[Vec[U]] = Concat(lhs, rhs)
-
-  extension [S <: Num](vec: Sig[Vec[S]])
-    def apply[U <: Num](to: Int, from: Int): Sig[Vec[U]] = Range[S, U](vec, to, from)
-
-  extension [T <: Num](x: Sig[Vec[T]])
-    def === (y: Sig[Vec[T]]): Sig[Bit] = Equals(x, y)
 
   /** When syntax
    *

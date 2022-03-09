@@ -4,6 +4,7 @@ import zeno.lang._
 import zeno.core.Values
 
 import scala.language.implicitConversions
+import scala.collection.mutable.ArrayBuffer
 
  object ISA {
    val NOP     =    0x00
@@ -46,7 +47,7 @@ object Controller {
   type BusIn =
     Vec[32] // read data
 
-  final val InstrAddrSize: Int = 6
+  final val InstrAddrSize = 16
 
   type ACC   = Vec[32]
   type INSTR = Vec[16]
@@ -55,11 +56,11 @@ object Controller {
   def instrMemory(prog: Array[Int], addr: Sig[Vec[InstrAddrSize.type]]): Sig[Vec[16]] = {
     def recur(acc: Int, bitIndex: Int): Sig[Vec[16]] =
       if bitIndex >= InstrAddrSize then
-        prog(acc).W[16]
+        prog(acc).toSig(16)
       else
         when (addr(bitIndex)) {
           val acc2 = (1 << bitIndex) | acc
-          if acc2 >= prog.length then 0.W[16]
+          if acc2 >= prog.length then 0.toSig(16)
           else recur(acc2, bitIndex + 1)
         } otherwise {
           recur(acc, bitIndex + 1)
@@ -74,15 +75,15 @@ object Controller {
     val acc0: Value  = 0.toValue(32)
     val mode0: Value = 0.toValue(1)
 
-    val defaultBusOut: Sig[BusOut] = 0.W[8] ~ 0 ~ 0 ~ 0.W[32]
+    val defaultBusOut: Sig[BusOut] = 0.toSig(8) ~ 0 ~ 0 ~ 0.toSig(32)
 
     fsm("processor", pc0 ~ acc0 ~ mode0) { (state: Sig[PC ~ ACC ~ Bit]) =>
       val pc ~ acc ~ mode = state
 
-      let("pcNext", pc + 1.W[InstrAddrSize.type]) { pcNext =>
+      let("pcNext", pc + 1.toSig(InstrAddrSize)) { pcNext =>
 
         let("instr", instrMemory(prog, pc)) { instr =>
-          val operand = (0.W[24] ++ instr(7, 0)).as[Vec[32]]
+          val operand = (0.toSig(24) ++ instr(7, 0)).as[Vec[32]]
           val opcode  = instr(15, 8).as[Vec[8]]
 
           def next(
@@ -100,101 +101,101 @@ object Controller {
             // pending mode
             val opcode  = instr(15, 8).as[Vec[8]]
 
-            when (opcode === ADD.W[8]) {
+            when (opcode === ADD.toSig(8)) {
               next(acc = acc + busIn)
-            } .when (opcode === SUB.W[8]) {
+            } .when (opcode === SUB.toSig(8)) {
               next(acc = acc - busIn)
-            } .when (opcode === LD.W[8]) {
+            } .when (opcode === LD.toSig(8)) {
               next(acc = busIn)
-            } .when (opcode === AND.W[8]) {
+            } .when (opcode === AND.toSig(8)) {
               next(acc = acc & busIn)
-            } .when (opcode === OR.W[8]) {
+            } .when (opcode === OR.toSig(8)) {
               next(acc = acc | busIn)
-            } .when (opcode === XOR.W[8]) {
+            } .when (opcode === XOR.toSig(8)) {
               next(acc = acc ^ busIn)
             } .otherwise {
               next()
             }
           } otherwise {
-            val jmpAddr = instr(InstrAddrSize - 1, 0).as[PC]
+            val jmpAddr = instr(7, 0).signExtend(InstrAddrSize).as[PC]
             val busAddr = instr(7, 0).as[Vec[8]]
-            val shiftOperand = instr(3, 0).as[Vec[4]]
+            val shiftOperand = instr(4, 0).as[Vec[5]]
 
-            val loadBusOut: Sig[BusOut] = busAddr ~ 1 ~ 0 ~ 0.W[32]
+            val loadBusOut: Sig[BusOut] = busAddr ~ 1 ~ 0 ~ 0.toSig(32)
 
-            when (opcode === ADDI.W[8]) {
+            when (opcode === ADDI.toSig(8)) {
               val acc2 = acc + operand
               next(acc = acc2)
 
-            } .when (opcode === SUBI.W[8]) {
+            } .when (opcode === SUBI.toSig(8)) {
               val acc2 = acc - operand
               next(acc = acc2)
 
-            } .when (opcode === LDI.W[8]) {
+            } .when (opcode === LDI.toSig(8)) {
               next(acc = operand)
 
-            } .when (opcode === ST.W[8]) {
+            } .when (opcode === ST.toSig(8)) {
               val busOut: Sig[BusOut] = busAddr ~ 0 ~ 1 ~ acc
               next(out = busOut)
 
-            } .when (opcode === ANDI.W[8]) {
+            } .when (opcode === ANDI.toSig(8)) {
               val acc2 = acc & operand
               next(acc = acc2)
 
-            } .when (opcode === ORI.W[8]) {
+            } .when (opcode === ORI.toSig(8)) {
               val acc2 = acc | operand
               next(acc = acc2)
 
-            } .when (opcode === XORI.W[8]) {
+            } .when (opcode === XORI.toSig(8)) {
               val acc2 = acc ^ operand
               next(acc = acc2)
 
-            } .when (opcode === SHL.W[8]) {
+            } .when (opcode === SHL.toSig(8)) {
               val acc2 = acc << shiftOperand
               next(acc = acc2)
 
-            } .when (opcode === SHR.W[8]) {
+            } .when (opcode === SHR.toSig(8)) {
               val acc2 = acc >> shiftOperand
               next(acc = acc2)
 
-            } .when (opcode === BR.W[8]) {
-              next(pc = jmpAddr)
+            } .when (opcode === BR.toSig(8)) {
+              next(pc = pc + jmpAddr)
 
-            } .when (opcode === BRZ.W[8]) {
-              when(acc === 0.W[32]) {
-                next(pc = jmpAddr)
+            } .when (opcode === BRZ.toSig(8)) {
+              when(acc === 0.toSig(32)) {
+                next(pc = pc + jmpAddr)
               }
               .otherwise {
                 next()
               }
 
-            } .when (opcode === BRNZ.W[8]) {
-              when(acc === 0.W[32]) {
+            } .when (opcode === BRNZ.toSig(8)) {
+              when(acc === 0.toSig(32)) {
                 next()
               }
               .otherwise {
-                next(pc = jmpAddr)
+                next(pc = pc + jmpAddr)
               }
 
-            } .when (opcode === ADD.W[8]) {
+            } .when (opcode === ADD.toSig(8)) {
               next(pc = pc, out = loadBusOut, mode = 1)
 
-            } .when (opcode === SUB.W[8]) {
+            } .when (opcode === SUB.toSig(8)) {
               next(pc = pc, out = loadBusOut, mode = 1)
 
-            } .when (opcode === LD.W[8]) {
+            } .when (opcode === LD.toSig(8)) {
               next(pc = pc, out = loadBusOut, mode = 1)
 
-            } .when (opcode === AND.W[8]) {
+            } .when (opcode === AND.toSig(8)) {
               next(pc = pc, out = loadBusOut, mode = 1)
 
-            } .when (opcode === OR.W[8]) {
+            } .when (opcode === OR.toSig(8)) {
               next(pc = pc, out = loadBusOut, mode = 1)
 
-            } .when (opcode === XOR.W[8]) {
+            } .when (opcode === XOR.toSig(8)) {
               next(pc = pc, out = loadBusOut, mode = 1)
 
-            } .when (opcode === EXIT.W[8]) {
+            } .when (opcode === EXIT.toSig(8)) {
               next(exit = true)
 
             } .otherwise { // NOP
@@ -241,6 +242,7 @@ object Controller {
       }
 
       // println("pc = " + pc.toInt)
+      // println("instr = " + Integer.toBinaryString(instr.toInt))
       // println("acc = " + acc.toInt)
 
       // displayPrompt()
@@ -351,36 +353,37 @@ object Assembler {
       s.toInt
     }
 
-    // println("lines width = " + lines.width)
+    val instructions: ArrayBuffer[Int] = new ArrayBuffer[Int]
+    def PC(): Int = instructions.length
 
-    val instructions = for (line <- lines if !line.matches("(.*:)")) yield {
+    for (line <- lines if !line.matches("(.*:)")) {
       val tokens = line.split("\\s+")
-      tokens(0) match {
+      val instr = tokens(0) match
         case "nop"     => NOP
-        case "add"     => (ADD    << 8) + address(tokens(1))
-        case "sub"     => (SUB    << 8) + address(tokens(1))
-        case "and"     => (AND    << 8) + address(tokens(1))
-        case "or"      => (OR     << 8) + address(tokens(1))
-        case "xor"     => (XOR    << 8) + address(tokens(1))
-        case "addi"    => (ADDI   << 8) + toInt(tokens(1))
-        case "subi"    => (SUBI   << 8) + toInt(tokens(1))
-        case "andi"    => (ANDI   << 8) + toInt(tokens(1))
-        case "ori"     => (ORI    << 8) + toInt(tokens(1))
-        case "xori"    => (XORI   << 8) + toInt(tokens(1))
-        case "shr"     => (SHR    << 8) + toInt(tokens(1))
-        case "shl"     => (SHL    << 8) + toInt(tokens(1))
-        case "load"    => (LD     << 8) + address(tokens(1))
-        case "loadi"   => (LDI    << 8) + toInt(tokens(1))
-        case "store"   => (ST     << 8) + address(tokens(1))
-        case "br"      => (BR     << 8) + symbols(tokens(1))
-        case "brz"     => (BRZ    << 8) + symbols(tokens(1))
-        case "brnz"    => (BRNZ   << 8) + symbols(tokens(1))
+        case "add"     => (ADD    << 8) | address(tokens(1))
+        case "sub"     => (SUB    << 8) | address(tokens(1))
+        case "and"     => (AND    << 8) | address(tokens(1))
+        case "or"      => (OR     << 8) | address(tokens(1))
+        case "xor"     => (XOR    << 8) | address(tokens(1))
+        case "addi"    => (ADDI   << 8) | toInt(tokens(1))
+        case "subi"    => (SUBI   << 8) | toInt(tokens(1))
+        case "andi"    => (ANDI   << 8) | toInt(tokens(1))
+        case "ori"     => (ORI    << 8) | toInt(tokens(1))
+        case "xori"    => (XORI   << 8) | toInt(tokens(1))
+        case "shr"     => (SHR    << 8) | toInt(tokens(1))
+        case "shl"     => (SHL    << 8) | toInt(tokens(1))
+        case "load"    => (LD     << 8) | address(tokens(1))
+        case "loadi"   => (LDI    << 8) | toInt(tokens(1))
+        case "store"   => (ST     << 8) | address(tokens(1))
+        case "br"      => (BR     << 8) | ((symbols(tokens(1)) - PC()) & 0xFF)
+        case "brz"     => (BRZ    << 8) | ((symbols(tokens(1)) - PC()) & 0xFF)
+        case "brnz"    => (BRNZ   << 8) | ((symbols(tokens(1)) - PC()) & 0xFF)
         case "exit"    => (EXIT   << 8)
         case t: String => throw new Exception("Assembler error: unknown instruction: " + t)
-      }
+      instructions += instr
     }
 
-    // println("instr width: " + instructions.width)
+    // instructions.foreach(x => println(Integer.toBinaryString(x)))
 
     instructions.toArray
   }
