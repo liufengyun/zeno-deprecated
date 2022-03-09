@@ -176,22 +176,22 @@ object Controller {
               }
 
             } .when (opcode === ADD.W[8]) {
-              next(out = loadBusOut, mode = 1)
+              next(pc = pc, out = loadBusOut, mode = 1)
 
             } .when (opcode === SUB.W[8]) {
-              next(out = loadBusOut, mode = 1)
+              next(pc = pc, out = loadBusOut, mode = 1)
 
             } .when (opcode === LD.W[8]) {
-              next(out = loadBusOut, mode = 1)
+              next(pc = pc, out = loadBusOut, mode = 1)
 
             } .when (opcode === AND.W[8]) {
-              next(out = loadBusOut, mode = 1)
+              next(pc = pc, out = loadBusOut, mode = 1)
 
             } .when (opcode === OR.W[8]) {
-              next(out = loadBusOut, mode = 1)
+              next(pc = pc, out = loadBusOut, mode = 1)
 
             } .when (opcode === XOR.W[8]) {
-              next(out = loadBusOut, mode = 1)
+              next(pc = pc, out = loadBusOut, mode = 1)
 
             } .when (opcode === EXIT.W[8]) {
               next(exit = true)
