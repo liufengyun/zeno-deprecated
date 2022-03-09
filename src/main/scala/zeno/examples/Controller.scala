@@ -46,30 +46,27 @@ object Controller {
   type BusIn =
     Vec[32] // read data
 
+  final val InstrAddrSize: Int = 6
+
   type ACC   = Vec[32]
   type INSTR = Vec[16]
+  type PC    = Vec[InstrAddrSize.type]
 
-  def instrMemory(addrWidth: Int, prog: Array[Int], addr: Sig[Vec[addrWidth.type]]): Sig[Vec[16]] = {
-    val default: Sig[Vec[16]] = 0.W[16]
-    (0 until (1 << addrWidth)).foldLeft(default) { (acc, curAddr) =>
-      when[Vec[16]] (addr === curAddr.W[addrWidth.type]) {
-        if (curAddr < prog.size) prog(curAddr).W[16]
-        else default
-      } otherwise {
-        acc
-      }
-    }
+  def instrMemory(prog: Array[Int], addr: Sig[Vec[InstrAddrSize.type]]): Sig[Vec[16]] = {
+    def recur(acc: Int, bitIndex: Int): Sig[Vec[16]] =
+      if bitIndex >= InstrAddrSize then
+        if acc >= prog.length then 0.W[16]
+        else prog(acc).W[16]
+      else
+        when (addr(bitIndex)) { recur((1 << bitIndex) + acc, bitIndex + 1) }
+        .otherwise { recur(acc, bitIndex + 1) }
+    recur(0, 0)
   }
 
   def processor(prog: Array[Int], busIn: Sig[BusIn]): Sig[BusOut ~ Debug] = {
-    assert(prog.size > 0)
-    var addrW = 1
-    while ((1 << addrW) < prog.size) addrW += 1
+    assert(prog.size < (1 << 12))
 
-    val addrWidth = addrW
-    type PC  = Vec[addrWidth.type]
-
-    val pc0: Value   = 0.toValue(addrWidth)
+    val pc0: Value   = 0.toValue(InstrAddrSize)
     val acc0: Value  = 0.toValue(32)
     val mode0: Value = 0.toValue(1)
 
@@ -78,9 +75,9 @@ object Controller {
     fsm("processor", pc0 ~ acc0 ~ mode0) { (state: Sig[PC ~ ACC ~ Bit]) =>
       val pc ~ acc ~ mode = state
 
-      let("pcNext", pc + 1.W[addrWidth.type]) { pcNext =>
+      let("pcNext", pc + 1.W[InstrAddrSize.type]) { pcNext =>
 
-        let("instr", instrMemory(addrWidth, prog, pc)) { instr =>
+        let("instr", instrMemory(prog, pc)) { instr =>
           val operand = (0.W[24] ++ instr(7, 0)).as[Vec[32]]
           val opcode  = instr(15, 8).as[Vec[8]]
 
@@ -115,7 +112,7 @@ object Controller {
               next()
             }
           } otherwise {
-            val jmpAddr = instr(addrWidth - 1, 0).as[PC]
+            val jmpAddr = instr(InstrAddrSize - 1, 0).as[PC]
             val busAddr = instr(7, 0).as[Vec[8]]
             val shiftOperand = instr(3, 0).as[Vec[4]]
 
