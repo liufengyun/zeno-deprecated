@@ -55,11 +55,15 @@ object Controller {
   def instrMemory(prog: Array[Int], addr: Sig[Vec[InstrAddrSize.type]]): Sig[Vec[16]] = {
     def recur(acc: Int, bitIndex: Int): Sig[Vec[16]] =
       if bitIndex >= InstrAddrSize then
-        if acc >= prog.length then 0.W[16]
-        else prog(acc).W[16]
+        prog(acc).W[16]
       else
-        when (addr(bitIndex)) { recur((1 << bitIndex) + acc, bitIndex + 1) }
-        .otherwise { recur(acc, bitIndex + 1) }
+        when (addr(bitIndex)) {
+          val acc2 = (1 << bitIndex) | acc
+          if acc2 >= prog.length then 0.W[16]
+          else recur(acc2, bitIndex + 1)
+        } otherwise {
+          recur(acc, bitIndex + 1)
+        }
     recur(0, 0)
   }
 
