@@ -7,8 +7,9 @@ import java.nio.charset.StandardCharsets._
 import java.nio.file.{Files, Paths, FileSystems, Path}
 import java.io.File
 
-import lang._
-import examples._
+import lang.*
+import examples.*
+import examples.controller.*
 
 import scala.language.implicitConversions
 class TestSuite {
